@@ -9,6 +9,7 @@ class DeofootTheme {
   static const Color textMuted = Color(0xFF5B6B7F);
   static const Color available = Color(0xFF16A34A); // hijau: slot bebas
   static const Color booked = Color(0xFFCBD5E1); // abu: slot terisi
+  static const Color pastSlot = Color(0xFFE9EEF4); // abu muda: slot lewat (disabled, beda dari Terisi)
   static const Color pending = Color(0xFFF59E0B); // amber: menunggu verifikasi
   static const Color danger = Color(0xFFDC2626);
 

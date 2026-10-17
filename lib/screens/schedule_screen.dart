@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../models.dart';
@@ -6,8 +5,9 @@ import '../booking_logic.dart';
 import '../services/firestore_service.dart';
 import 'booking_screen.dart';
 
-/// Layar 4 — Jadwal lapangan: date picker 7 hari + grid slot 08.00–22.00.
-/// Tap slot berurutan untuk booking multi-jam dalam 1 transaksi.
+/// Layar 4 — Jadwal lapangan: date picker 60 hari + grid slot 08.00–22.00.
+/// Tap slot hijau → pilih; tap yang terpilih → batalkan.
+/// Seleksi selalu satu blok berurutan.
 class ScheduleScreen extends StatefulWidget {
   final Field field;
   const ScheduleScreen({super.key, required this.field});
@@ -18,11 +18,9 @@ class ScheduleScreen extends StatefulWidget {
 
 class _ScheduleScreenState extends State<ScheduleScreen> {
   DateTime _selected = DateTime.now();
-  int? _selStart; // jam mulai pilihan (inklusif)
-  int? _selEnd; // jam akhir pilihan (eksklusif)
+  SlotSelection _sel = const SlotSelection.empty();
 
-  List<DateTime> get _days =>
-      List.generate(7, (i) => DateTime.now().add(Duration(days: i)));
+  List<DateTime> get _days => bookingDateRange(DateTime.now());
 
   @override
   void initState() {
@@ -31,42 +29,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     FirestoreService().expireStalePendings().then((_) {}, onError: (_) {});
   }
 
-  bool _isSel(int h) =>
-      _selStart != null && h >= _selStart! && h < _selEnd!;
-
-  int get _selHours => _selStart == null ? 0 : _selEnd! - _selStart!;
-
-  /// Tap slot: pilih / perpanjang rentang berurutan / batal pilih.
+  /// Tap slot: toggle pilih/batal via aturan [toggleSlot].
   void _tapSlot(int h, Map<int, SlotStatus> statuses) {
-    if (_selStart == null) {
-      setState(() {
-        _selStart = h;
-        _selEnd = h + 1;
-      });
-      return;
-    }
-    if (_selStart == h && _selEnd == h + 1) {
-      setState(() {
-        _selStart = null;
-        _selEnd = null;
-      });
-      return;
-    }
-    final ns = min(_selStart!, h);
-    final ne = max(_selEnd!, h + 1);
-    for (var hh = ns; hh < ne; hh++) {
-      if ((statuses[hh] ?? SlotStatus.free) != SlotStatus.free ||
-          _isPastSlot(hh)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Pilih jam berurutan yang masih bebas.')),
-        );
-        return;
-      }
-    }
+    final now = DateTime.now();
+    bool selectable(int hh) =>
+        (statuses[hh] ?? SlotStatus.free) == SlotStatus.free &&
+        !isPastSlot(_selected, hh, now);
     setState(() {
-      _selStart = ns;
-      _selEnd = ne;
+      _sel = toggleSlot(_sel, h, selectable);
     });
   }
 
@@ -78,9 +48,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       appBar: AppBar(title: Text('Jadwal — ${widget.field.name}')),
       body: Column(
         children: [
-          // Date picker horizontal 7 hari
+          // Aksen warna identitas lapangan.
+          Container(height: 4, color: widget.field.color),
+          // Date picker horizontal 60 hari (hari ini → H+59)
           SizedBox(
-            height: 84,
+            height: 96,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -88,11 +60,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               itemBuilder: (context, i) {
                 final d = _days[i];
                 final sel = fmtDate(d) == dateStr;
+                final showMonth = i == 0 || d.month != _days[i - 1].month;
                 return GestureDetector(
                   onTap: () => setState(() {
                     _selected = d;
-                    _selStart = null;
-                    _selEnd = null;
+                    _sel = const SlotSelection.empty();
                   }),
                   child: Container(
                     width: 64,
@@ -109,6 +81,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
+                        if (showMonth)
+                          Text(
+                            '${monthLabel(d)} ${d.year}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: sel
+                                  ? Colors.white70
+                                  : DeofootTheme.textMuted,
+                            ),
+                          ),
                         Text(
                           dayLabel(d),
                           style: TextStyle(
@@ -142,17 +125,19 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: const [
                 _Legend(color: DeofootTheme.available, label: 'Bebas'),
-                SizedBox(width: 16),
+                SizedBox(width: 12),
                 _Legend(color: DeofootTheme.booked, label: 'Terisi'),
-                SizedBox(width: 16),
+                SizedBox(width: 12),
                 _Legend(color: DeofootTheme.pending, label: 'Menunggu'),
+                SizedBox(width: 12),
+                _Legend(color: DeofootTheme.pastSlot, label: 'Lewat'),
               ],
             ),
           ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Text(
-              'Tap slot berurutan untuk booking lebih dari 1 jam.',
+              'Tap slot hijau untuk pilih, tap lagi untuk batal. Seleksi selalu berurutan.',
               style:
                   TextStyle(fontSize: 12, color: DeofootTheme.textMuted),
             ),
@@ -167,6 +152,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 }
                 final statuses = slotStatuses(
                     snap.data ?? [], widget.field.id, dateStr);
+                final now = DateTime.now();
                 return GridView.builder(
                   padding: const EdgeInsets.all(16),
                   gridDelegate:
@@ -180,26 +166,30 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   itemBuilder: (context, i) {
                     final h = 8 + i;
                     final st = statuses[h] ?? SlotStatus.free;
-                    final isPast = _isPastSlot(h);
-                    final enabled =
-                        st == SlotStatus.free && !isPast;
-                    final sel = _isSel(h);
+                    final past =
+                        isPastSlot(_selected, h, now) && st == SlotStatus.free;
+                    final enabled = st == SlotStatus.free && !past;
+                    final sel = _sel.contains(h);
                     Color bg;
                     Color fg = Colors.white;
                     if (sel) {
-                      bg = DeofootTheme.accent;
+                      // Seleksi: navy + teks putih + centang (beda dari status).
+                      bg = DeofootTheme.primary;
+                    } else if (past) {
+                      // Slot lewat: disabled, style sendiri (bukan abu Terisi).
+                      bg = DeofootTheme.pastSlot;
+                      fg = DeofootTheme.textMuted;
                     } else {
                       switch (st) {
                         case SlotStatus.free:
-                          bg = isPast
-                              ? DeofootTheme.booked
-                              : DeofootTheme.available;
+                          bg = DeofootTheme.available;
                           break;
                         case SlotStatus.booked:
                           bg = DeofootTheme.booked;
                           fg = DeofootTheme.textMuted;
                           break;
                         case SlotStatus.pending:
+                          // Amber HANYA untuk "Menunggu verifikasi".
                           bg = DeofootTheme.pending;
                           break;
                       }
@@ -219,11 +209,24 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      child: Text(
-                        hourLabel(h),
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600),
-                      ),
+                      child: sel
+                          ? Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.check, size: 18),
+                                const SizedBox(width: 4),
+                                Text(
+                                  hourLabel(h),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            )
+                          : Text(
+                              hourLabel(h),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600),
+                            ),
                     );
                   },
                 );
@@ -232,7 +235,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: _selStart == null
+      bottomNavigationBar: _sel.isEmpty
           ? null
           : SafeArea(
               child: Padding(
@@ -243,24 +246,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       builder: (_) => BookingScreen(
                         field: widget.field,
                         date: _selected,
-                        startHour: _selStart!,
-                        endHour: _selEnd!,
+                        startHour: _sel.start!,
+                        endHour: _sel.end!,
                       ),
                     ),
                   ),
                   child: Text(
-                      'Lanjut — $_selHours jam (${fmtRupiah(_selHours * widget.field.pricePerHour)})'),
+                      'Lanjut — ${_sel.hours} jam (${fmtRupiah(bookingTotal(_sel.hours, widget.field.pricePerHour))})'),
                 ),
               ),
             ),
     );
-  }
-
-  bool _isPastSlot(int hour) {
-    final now = DateTime.now();
-    final sel = _selected;
-    if (fmtDate(sel) != fmtDate(now)) return false;
-    return hour <= now.hour;
   }
 }
 

@@ -218,4 +218,113 @@ void main() {
       expect(isValidWhatsapp('08abc123456'), false);
     });
   });
+
+group('toggleSlot (v0.3)', () {
+  test('belum ada seleksi + tap bebas -> pilih 1 jam', () {
+    final r = toggleSlot(const SlotSelection.empty(), 10, (_) => true);
+    expect(r.start, 10);
+    expect(r.end, 11);
+    expect(r.hours, 1);
+  });
+
+  test('tap slot yang terpilih -> batal', () {
+    final r = toggleSlot(const SlotSelection(10, 12), 11, (_) => true);
+    expect(r.isEmpty, true);
+  });
+
+  test('tap bersebelahan -> perluas blok', () {
+    var r = toggleSlot(const SlotSelection(10, 11), 11, (_) => true);
+    expect(r.start, 10);
+    expect(r.end, 12);
+    r = toggleSlot(const SlotSelection(10, 12), 9, (_) => true);
+    expect(r.start, 9);
+    expect(r.end, 12);
+  });
+
+  test('tap tak bersebelahan (terhalang) -> mulai seleksi baru', () {
+    final sel = const SlotSelection(10, 11);
+    final r = toggleSlot(sel, 13, (h) => h != 12);
+    expect(r.start, 13);
+    expect(r.end, 14);
+  });
+
+  test('tap slot tak bisa dipilih -> seleksi tidak berubah', () {
+    final sel = const SlotSelection(10, 11);
+    final r = toggleSlot(sel, 13, (_) => false);
+    expect(r.start, 10);
+    expect(r.end, 11);
+  });
+
+  test('seleksi selalu satu blok berurutan', () {
+    var sel = const SlotSelection.empty();
+    sel = toggleSlot(sel, 14, (_) => true);
+    sel = toggleSlot(sel, 15, (_) => true);
+    sel = toggleSlot(sel, 16, (_) => true);
+    expect(sel.hours, 3);
+    expect(sel.contains(15), true);
+    expect(sel.contains(13), false);
+  });
+});
+
+group('bookingDateRange (v0.3)', () {
+  test('60 hari: hari ini -> H+59', () {
+    final now = DateTime(2026, 10, 17, 15, 30);
+    final days = bookingDateRange(now);
+    expect(days.length, 60);
+    expect(fmtDate(days.first), '2026-10-17');
+    expect(fmtDate(days.last), '2026-12-15');
+  });
+});
+
+group('isPastSlot (v0.3)', () {
+  test('hari ini jam lewat -> true', () {
+    final now = DateTime(2026, 10, 17, 14, 30);
+    expect(isPastSlot(DateTime(2026, 10, 17), 13, now), true);
+    expect(isPastSlot(DateTime(2026, 10, 17), 14, now), true);
+  });
+
+  test('hari ini jam depan -> false', () {
+    final now = DateTime(2026, 10, 17, 14, 30);
+    expect(isPastSlot(DateTime(2026, 10, 17), 15, now), false);
+  });
+
+  test('tanggal lain -> false', () {
+    final now = DateTime(2026, 10, 17, 14, 30);
+    expect(isPastSlot(DateTime(2026, 10, 18), 8, now), false);
+  });
+});
+
+group('bookingTotal & Field dinamis (v0.3)', () {
+  test('padel 1 jam @250rb = 250rb', () {
+    expect(bookingTotal(1, 250000), 250000);
+  });
+
+  test('futsal 2 jam @120rb = 240rb', () {
+    expect(bookingTotal(2, 120000), 240000);
+  });
+
+  test('Field.fromMap: field lengkap', () {
+    final f = Field.fromMap('P1', {
+      'name': 'Padel 1',
+      'category': 'Padel',
+      'pricePerHour': 250000,
+      'color': 0xFF1D4ED8,
+    });
+    expect(f.category, 'Padel');
+    expect(f.pricePerHour, 250000);
+    expect(f.photoAsset, 'assets/images/fields/p1.jpg');
+  });
+
+  test('Field.fromMap: fallback bila field belum ada', () {
+    final f = Field.fromMap('L9', {});
+    expect(f.name, 'L9');
+    expect(f.category, 'Futsal');
+    expect(f.pricePerHour, 120000);
+  });
+
+  test('monthLabel', () {
+    expect(monthLabel(DateTime(2026, 10, 17)), 'Okt');
+    expect(monthLabel(DateTime(2026, 8, 1)), 'Agu');
+  });
+});
 }

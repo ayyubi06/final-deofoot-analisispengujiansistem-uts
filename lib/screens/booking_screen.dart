@@ -46,7 +46,7 @@ class _BookingScreenState extends State<BookingScreen> {
   ];
 
   int get _hours => widget.endHour - widget.startHour;
-  int get _total => _hours * widget.field.pricePerHour;
+  int get _total => bookingTotal(_hours, widget.field.pricePerHour);
 
   @override
   void initState() {

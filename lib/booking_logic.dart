@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'models.dart';
 
 /// Port logika anti double-booking dari booking.py (cek_bentrok).
@@ -90,3 +91,63 @@ bool isValidWhatsapp(String v) {
   final t = v.trim();
   return RegExp(r'^08\d{8,12}$').hasMatch(t);
 }
+
+// ---------- v0.3: seleksi slot, tanggal, harga dinamis ----------
+
+/// Seleksi slot: satu blok berurutan [start, end), atau kosong.
+class SlotSelection {
+  final int? start; // inklusif, null = tidak ada seleksi
+  final int? end; // eksklusif
+  const SlotSelection(this.start, this.end);
+  const SlotSelection.empty() : this(null, null);
+
+  bool get isEmpty => start == null;
+  bool contains(int h) => !isEmpty && h >= start! && h < end!;
+  int get hours => isEmpty ? 0 : end! - start!;
+}
+
+/// Aturan toggle tap slot (murni, bisa di-test).
+/// [selectable] true bila slot boleh dipilih (bebas & belum lewat).
+/// - slot tak bisa dipilih → seleksi tidak berubah
+/// - tap slot yang sedang terpilih → batal (kosong)
+/// - belum ada seleksi → pilih 1 jam
+/// - tap slot bebas bersebelahan → perluas blok
+/// - tap slot bebas tak bersebelahan (terhalang) → mulai seleksi baru
+SlotSelection toggleSlot(
+    SlotSelection sel, int h, bool Function(int) selectable) {
+  if (!selectable(h)) return sel;
+  if (!sel.isEmpty && sel.contains(h)) return const SlotSelection.empty();
+  if (sel.isEmpty) return SlotSelection(h, h + 1);
+  final ns = min(sel.start!, h);
+  final ne = max(sel.end!, h + 1);
+  for (var hh = ns; hh < ne; hh++) {
+    if (!selectable(hh)) return SlotSelection(h, h + 1);
+  }
+  return SlotSelection(ns, ne);
+}
+
+/// Rentang tanggal booking: hari ini → H+59 (60 hari).
+List<DateTime> bookingDateRange(DateTime now) {
+  final base = DateTime(now.year, now.month, now.day);
+  return List.generate(60, (i) => base.add(Duration(days: i)));
+}
+
+/// true bila slot [hour] pada tanggal [selected] sudah lewat.
+/// Hanya berlaku untuk hari ini; tanggal lain selalu false.
+bool isPastSlot(DateTime selected, int hour, DateTime now) {
+  if (fmtDate(selected) != fmtDate(now)) return false;
+  return hour <= now.hour;
+}
+
+/// Label bulan Indonesia singkat.
+String monthLabel(DateTime d) {
+  const m = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+    'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+  ];
+  return m[d.month - 1];
+}
+
+/// Total harga booking: jam × tarif lapangan (tarif dari Firestore,
+/// bukan hardcode).
+int bookingTotal(int hours, int pricePerHour) => hours * pricePerHour;

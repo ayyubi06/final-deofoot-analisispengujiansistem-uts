@@ -1,21 +1,56 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'theme.dart';
 
-/// Model lapangan futsal.
+/// Model lapangan (futsal, padel, tenis, mini soccer).
 class Field {
   final String id;
   final String name;
   final int pricePerHour;
+  final String category;
+  final Color color;
 
-  Field({required this.id, required this.name, required this.pricePerHour});
+  Field({
+    required this.id,
+    required this.name,
+    required this.pricePerHour,
+    this.category = 'Futsal',
+    this.color = DeofootTheme.primary,
+  });
 
   factory Field.fromDoc(DocumentSnapshot doc) {
-    final d = doc.data() as Map<String, dynamic>? ?? {};
+    return Field.fromMap(
+        doc.id, doc.data() as Map<String, dynamic>? ?? {});
+  }
+
+  /// Konstruktor dari map mentah (dipakai juga untuk unit test).
+  factory Field.fromMap(String id, Map<String, dynamic> d) {
     return Field(
-      id: doc.id,
-      name: d['name'] as String? ?? doc.id,
+      id: id,
+      name: d['name'] as String? ?? id,
       pricePerHour: (d['pricePerHour'] as num?)?.toInt() ?? 120000,
+      category: d['category'] as String? ?? 'Futsal',
+      color: _parseColor(d['color']),
     );
   }
+
+  /// Path foto lapangan: `assets/images/fields/<id>.jpg` (id lowercase).
+  /// (l1.jpg, p1.jpg, t1.jpg, m1.jpg, ...).
+  String get photoAsset => 'assets/images/fields/${id.toLowerCase()}.jpg';
+}
+
+/// Parse warna dari Firestore: int ARGB atau String "#RRGGBB".
+/// Fallback ke navy bila format tidak dikenali.
+Color _parseColor(Object? v) {
+  if (v is int) return Color(v);
+  if (v is String) {
+    var s = v.trim();
+    if (s.startsWith('#')) s = s.substring(1);
+    if (s.length == 6) s = 'FF$s';
+    final n = int.tryParse(s, radix: 16);
+    if (n != null) return Color(n);
+  }
+  return DeofootTheme.primary;
 }
 
 /// Model booking.

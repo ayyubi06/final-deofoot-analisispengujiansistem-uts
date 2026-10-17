@@ -5,17 +5,35 @@ import '../booking_logic.dart';
 import '../services/firestore_service.dart';
 import 'schedule_screen.dart';
 
-/// Layar 3 — Beranda: sapaan + 3 kartu lapangan.
-class HomeScreen extends StatelessWidget {
+/// Layar 3 — Beranda: sapaan + tab kategori + kartu lapangan berfoto.
+class HomeScreen extends StatefulWidget {
   final String userEmail;
   const HomeScreen({super.key, required this.userEmail});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+const _categories = ['Semua', 'Futsal', 'Padel', 'Tenis', 'Mini Soccer'];
+
+class _HomeScreenState extends State<HomeScreen> {
+  String _tab = 'Semua';
 
   @override
   Widget build(BuildContext context) {
     final fs = FirestoreService();
     final today = fmtDate(DateTime.now());
     return Scaffold(
-      appBar: AppBar(title: const Text('Deofoot')),
+      appBar: AppBar(
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('assets/deofoot-logo.png', width: 32, height: 32),
+            const SizedBox(width: 8),
+            const Text('Deofoot'),
+          ],
+        ),
+      ),
       body: StreamBuilder<List<Field>>(
         stream: fs.watchFields(),
         builder: (context, snap) {
@@ -28,11 +46,14 @@ class HomeScreen extends StatelessWidget {
               child: Text('Data lapangan belum tersedia.'),
             );
           }
+          final shown = _tab == 'Semua'
+              ? fields
+              : fields.where((f) => f.category == _tab).toList();
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
               Text(
-                'Halo, ${userEmail.split('@').first}!',
+                'Halo, ${widget.userEmail.split('@').first}!',
                 style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -44,9 +65,43 @@ class HomeScreen extends StatelessWidget {
                 'Pilih lapangan untuk booking.',
                 style: TextStyle(color: DeofootTheme.textMuted),
               ),
-              const SizedBox(height: 16),
-              for (final f in fields)
-                _FieldCard(field: f, date: today),
+              const SizedBox(height: 12),
+              // Tab kategori
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final c in _categories)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(c),
+                          selected: _tab == c,
+                          onSelected: (_) => setState(() => _tab = c),
+                          selectedColor: DeofootTheme.primary,
+                          labelStyle: TextStyle(
+                            color: _tab == c
+                                ? Colors.white
+                                : DeofootTheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (shown.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text(
+                      'Belum ada lapangan di kategori ini.',
+                      style: TextStyle(color: DeofootTheme.textMuted),
+                    ),
+                  ),
+                ),
+              for (final f in shown) _FieldCard(field: f, date: today),
             ],
           );
         },
@@ -65,82 +120,141 @@ class _FieldCard extends StatelessWidget {
     final fs = FirestoreService();
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => ScheduleScreen(field: field),
           ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: DeofootTheme.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Stack(
+              children: [
+                // Foto lapangan (fallback bila file belum ada).
+                Image.asset(
+                  field.photoAsset,
+                  height: 140,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => Container(
+                    height: 140,
+                    color: DeofootTheme.primary.withValues(alpha: 0.08),
+                    child: const Icon(
+                      Icons.sports_soccer,
+                      size: 48,
+                      color: DeofootTheme.primary,
+                    ),
+                  ),
                 ),
-                child: const Icon(Icons.sports_soccer,
-                    size: 40, color: DeofootTheme.primary),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      field.name,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: DeofootTheme.primary,
+                // Overlay gradient navy.
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          DeofootTheme.primary.withValues(alpha: 0.78),
+                        ],
+                        stops: const [0.4, 1.0],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${fmtRupiah(field.pricePerHour)}/jam',
+                  ),
+                ),
+                // Badge kategori (aksen warna identitas lapangan).
+                Positioned(
+                  top: 10,
+                  left: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: field.color,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      field.category,
                       style: const TextStyle(
-                        color: DeofootTheme.textMuted,
+                        fontSize: 12,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    StreamBuilder<List<Booking>>(
-                      stream: fs.watchBookings(field.id, date),
-                      builder: (context, snap) {
-                        final bookings = snap.data ?? [];
-                        final statuses =
-                            slotStatuses(bookings, field.id, date);
-                        final free = statuses.values
-                            .where((s) => s == SlotStatus.free)
-                            .length;
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: DeofootTheme.available.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            '$free slot bebas hari ini',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: DeofootTheme.available,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
+                  ),
                 ),
+                // Nama + harga di atas foto.
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  bottom: 10,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          field.name,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${fmtRupiah(field.pricePerHour)}/jam',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  StreamBuilder<List<Booking>>(
+                    stream: fs.watchBookings(field.id, date),
+                    builder: (context, snap) {
+                      final bookings = snap.data ?? [];
+                      final statuses =
+                          slotStatuses(bookings, field.id, date);
+                      final free = statuses.values
+                          .where((s) => s == SlotStatus.free)
+                          .length;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: DeofootTheme.available.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '$free slot bebas hari ini',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: DeofootTheme.available,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const Spacer(),
+                  const Icon(Icons.chevron_right,
+                      color: DeofootTheme.textMuted),
+                ],
               ),
-              const Icon(Icons.chevron_right,
-                  color: DeofootTheme.textMuted),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
