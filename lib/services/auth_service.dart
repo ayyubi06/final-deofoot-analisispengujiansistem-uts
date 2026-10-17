@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 /// Wrapper Firebase Auth dengan pesan error Indonesia yang jelas.
 class AuthService {
@@ -19,6 +20,24 @@ class AuthService {
     try {
       await _auth.createUserWithEmailAndPassword(
           email: email, password: password);
+    } on FirebaseAuthException catch (e) {
+      throw _pesan(e);
+    }
+  }
+
+  /// Login dengan Google. Return null bila user membatalkan dialog
+  /// (diperlakukan diam, bukan error).
+  Future<User?> signInWithGoogle() async {
+    final gUser = await GoogleSignIn().signIn();
+    if (gUser == null) return null;
+    final gAuth = await gUser.authentication;
+    final cred = GoogleAuthProvider.credential(
+      accessToken: gAuth.accessToken,
+      idToken: gAuth.idToken,
+    );
+    try {
+      final res = await _auth.signInWithCredential(cred);
+      return res.user;
     } on FirebaseAuthException catch (e) {
       throw _pesan(e);
     }

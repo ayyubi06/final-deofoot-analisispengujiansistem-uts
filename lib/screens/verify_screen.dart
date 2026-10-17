@@ -14,9 +14,13 @@ class VerifyScreen extends StatelessWidget {
     final fs = FirestoreService();
     return Scaffold(
       appBar: AppBar(title: const Text('Verifikasi Pembayaran')),
-      body: StreamBuilder<List<Booking>>(
-        stream: fs.watchPending(),
-        builder: (context, snap) {
+      body: Column(
+        children: [
+          const _Dashboard(),
+          Expanded(
+            child: StreamBuilder<List<Booking>>(
+              stream: fs.watchPending(),
+              builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -28,16 +32,78 @@ class VerifyScreen extends StatelessWidget {
                       TextStyle(color: DeofootTheme.textMuted)),
             );
           }
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: items.length,
-            itemBuilder: (_, i) =>
-                _PendingCard(booking: items[i]),
-          );
-        },
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: items.length,
+                  itemBuilder: (_, i) =>
+                      _PendingCard(booking: items[i]),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+/// Dashboard mini admin: 3 angka hari ini, real-time dari Firestore.
+class _Dashboard extends StatelessWidget {
+  const _Dashboard();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<Booking>>(
+      stream: FirestoreService().watchBookingsToday(),
+      builder: (context, snap) {
+        final items = snap.data ?? [];
+        final aktif = items
+            .where((b) => b.status == 'pending' || b.status == 'confirmed')
+            .toList();
+        final slotTerisi = aktif.fold<int>(
+            0, (n, b) => n + (b.endMinutes - b.startMinutes) ~/ 60);
+        final pemasukan = items
+            .where((b) => b.status == 'confirmed')
+            .fold<int>(0, (n, b) => n + b.totalPrice);
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: Row(
+            children: [
+              _stat('Booking\nhari ini', '${aktif.length}'),
+              const SizedBox(width: 8),
+              _stat('Slot\nterisi', '$slotTerisi'),
+              const SizedBox(width: 8),
+              _stat('Estimasi\npemasukan', fmtRupiah(pemasukan)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _stat(String label, String value) => Expanded(
+        child: Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+            child: Column(
+              children: [
+                Text(value,
+                    style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: DeofootTheme.primary)),
+                const SizedBox(height: 4),
+                Text(label,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 11, color: DeofootTheme.textMuted)),
+              ],
+            ),
+          ),
+        ),
+      );
 }
 
 class _PendingCard extends StatelessWidget {
@@ -76,6 +142,17 @@ class _PendingCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(b.userEmail,
                 style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.chat_outlined,
+                    size: 14, color: DeofootTheme.textMuted),
+                const SizedBox(width: 4),
+                Text('WA: ${b.whatsapp.isEmpty ? '-' : b.whatsapp}',
+                    style: const TextStyle(
+                        fontSize: 13, color: DeofootTheme.textMuted)),
+              ],
+            ),
             const SizedBox(height: 4),
             Text(
                 'Lapangan ${b.fieldName} • ${b.date} • ${b.startTime}–${b.endTime}',

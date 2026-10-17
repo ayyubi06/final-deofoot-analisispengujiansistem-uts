@@ -31,6 +31,7 @@ class Booking {
   final String status; // pending | confirmed | rejected | cancelled | expired
   final String? proofBase64;
   final int totalPrice;
+  final String whatsapp;
   final DateTime createdAt;
 
   Booking({
@@ -45,6 +46,7 @@ class Booking {
     required this.status,
     this.proofBase64,
     required this.totalPrice,
+    this.whatsapp = '',
     required this.createdAt,
   });
 
@@ -62,6 +64,7 @@ class Booking {
       status: d['status'] as String? ?? 'pending',
       proofBase64: d['proofBase64'] as String?,
       totalPrice: (d['totalPrice'] as num?)?.toInt() ?? 0,
+      whatsapp: d['whatsapp'] as String? ?? '',
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }

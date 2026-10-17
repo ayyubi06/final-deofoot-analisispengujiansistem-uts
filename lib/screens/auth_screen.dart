@@ -62,6 +62,26 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
+  Future<void> _signInGoogle() async {
+    setState(() => _loading = true);
+    try {
+      final u = await _auth.signInWithGoogle();
+      if (u == null) return; // dibatalkan user -> diam, bukan error
+      await _fs.ensureUserDoc(u.uid, u.email ?? '');
+      if (mounted) _goMain(u.email ?? '');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(e.toString()),
+              backgroundColor: DeofootTheme.danger),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   void _goMain(String email) {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => MainNav(userEmail: email)),
@@ -150,6 +170,15 @@ class _AuthScreenState extends State<AuthScreen> {
                 child: Text(_isLogin
                     ? 'Belum punya akun? Daftar'
                     : 'Sudah punya akun? Masuk'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _loading ? null : _signInGoogle,
+                icon: const Icon(Icons.g_mobiledata, size: 28),
+                label: const Text('Masuk dengan Google'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                ),
               ),
             ],
           ),

@@ -84,3 +84,9 @@ String fmtRupiah(int n) {
   }
   return 'Rp${buf.toString()}';
 }
+
+/// Validasi nomor WhatsApp: diawali 08, semua digit, total 10-14 digit.
+bool isValidWhatsapp(String v) {
+  final t = v.trim();
+  return RegExp(r'^08\d{8,12}$').hasMatch(t);
+}

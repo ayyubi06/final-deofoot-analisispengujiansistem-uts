@@ -80,6 +80,15 @@ class FirestoreService {
     });
   }
 
+  /// Semua booking HARI INI (untuk dashboard mini admin).
+  Stream<List<Booking>> watchBookingsToday() {
+    return _db
+        .collection('bookings')
+        .where('date', isEqualTo: fmtDate(DateTime.now()))
+        .snapshots()
+        .map((s) => s.docs.map(Booking.fromDoc).toList());
+  }
+
   /// Buat booking dengan cek ulang anti double-booking TEPAT SEBELUM tulis.
   /// Lempar [BookingConflictException] jika slot sudah terisi.
   Future<String> createBooking({
@@ -89,15 +98,17 @@ class FirestoreService {
     required String fieldName,
     required String date,
     required int startHour,
+    required int endHour,
+    required String whatsapp,
     required String proofBase64,
     required int totalPrice,
   }) async {
     final startMin = startHour * 60;
-    final endMin = startMin + 60;
+    final endMin = endHour * 60;
     final startTime =
         '${startHour.toString().padLeft(2, '0')}:00';
     final endTime =
-        '${(startHour + 1).toString().padLeft(2, '0')}:00';
+        '${endHour.toString().padLeft(2, '0')}:00';
 
     // Cek ulang: baca booking terbaru untuk lapangan+tanggal ini.
     final snap = await _db
@@ -121,6 +132,7 @@ class FirestoreService {
       'startTime': startTime,
       'endTime': endTime,
       'status': 'pending',
+      'whatsapp': whatsapp,
       'proofBase64': proofBase64,
       'totalPrice': totalPrice,
       'createdAt': FieldValue.serverTimestamp(),

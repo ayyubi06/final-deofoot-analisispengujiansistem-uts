@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../models.dart';
@@ -6,6 +7,7 @@ import '../services/firestore_service.dart';
 import 'booking_screen.dart';
 
 /// Layar 4 — Jadwal lapangan: date picker 7 hari + grid slot 08.00–22.00.
+/// Tap slot berurutan untuk booking multi-jam dalam 1 transaksi.
 class ScheduleScreen extends StatefulWidget {
   final Field field;
   const ScheduleScreen({super.key, required this.field});
@@ -16,6 +18,11 @@ class ScheduleScreen extends StatefulWidget {
 
 class _ScheduleScreenState extends State<ScheduleScreen> {
   DateTime _selected = DateTime.now();
+  int? _selStart; // jam mulai pilihan (inklusif)
+  int? _selEnd; // jam akhir pilihan (eksklusif)
+
+  List<DateTime> get _days =>
+      List.generate(7, (i) => DateTime.now().add(Duration(days: i)));
 
   @override
   void initState() {
@@ -24,15 +31,51 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     FirestoreService().expireStalePendings().then((_) {}, onError: (_) {});
   }
 
-  List<DateTime> get _days =>
-      List.generate(7, (i) => DateTime.now().add(Duration(days: i)));
+  bool _isSel(int h) =>
+      _selStart != null && h >= _selStart! && h < _selEnd!;
+
+  int get _selHours => _selStart == null ? 0 : _selEnd! - _selStart!;
+
+  /// Tap slot: pilih / perpanjang rentang berurutan / batal pilih.
+  void _tapSlot(int h, Map<int, SlotStatus> statuses) {
+    if (_selStart == null) {
+      setState(() {
+        _selStart = h;
+        _selEnd = h + 1;
+      });
+      return;
+    }
+    if (_selStart == h && _selEnd == h + 1) {
+      setState(() {
+        _selStart = null;
+        _selEnd = null;
+      });
+      return;
+    }
+    final ns = min(_selStart!, h);
+    final ne = max(_selEnd!, h + 1);
+    for (var hh = ns; hh < ne; hh++) {
+      if ((statuses[hh] ?? SlotStatus.free) != SlotStatus.free ||
+          _isPastSlot(hh)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Pilih jam berurutan yang masih bebas.')),
+        );
+        return;
+      }
+    }
+    setState(() {
+      _selStart = ns;
+      _selEnd = ne;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final fs = FirestoreService();
     final dateStr = fmtDate(_selected);
     return Scaffold(
-      appBar: AppBar(title: Text('Jadwal — Lapangan ${widget.field.name}')),
+      appBar: AppBar(title: Text('Jadwal — ${widget.field.name}')),
       body: Column(
         children: [
           // Date picker horizontal 7 hari
@@ -46,7 +89,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 final d = _days[i];
                 final sel = fmtDate(d) == dateStr;
                 return GestureDetector(
-                  onTap: () => setState(() => _selected = d),
+                  onTap: () => setState(() {
+                    _selected = d;
+                    _selStart = null;
+                    _selEnd = null;
+                  }),
                   child: Container(
                     width: 64,
                     margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -102,6 +149,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               ],
             ),
           ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Tap slot berurutan untuk booking lebih dari 1 jam.',
+              style:
+                  TextStyle(fontSize: 12, color: DeofootTheme.textMuted),
+            ),
+          ),
           // Grid slot
           Expanded(
             child: StreamBuilder<List<Booking>>(
@@ -128,33 +183,30 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     final isPast = _isPastSlot(h);
                     final enabled =
                         st == SlotStatus.free && !isPast;
+                    final sel = _isSel(h);
                     Color bg;
                     Color fg = Colors.white;
-                    switch (st) {
-                      case SlotStatus.free:
-                        bg = isPast
-                            ? DeofootTheme.booked
-                            : DeofootTheme.available;
-                        break;
-                      case SlotStatus.booked:
-                        bg = DeofootTheme.booked;
-                        fg = DeofootTheme.textMuted;
-                        break;
-                      case SlotStatus.pending:
-                        bg = DeofootTheme.pending;
-                        break;
+                    if (sel) {
+                      bg = DeofootTheme.accent;
+                    } else {
+                      switch (st) {
+                        case SlotStatus.free:
+                          bg = isPast
+                              ? DeofootTheme.booked
+                              : DeofootTheme.available;
+                          break;
+                        case SlotStatus.booked:
+                          bg = DeofootTheme.booked;
+                          fg = DeofootTheme.textMuted;
+                          break;
+                        case SlotStatus.pending:
+                          bg = DeofootTheme.pending;
+                          break;
+                      }
                     }
                     return ElevatedButton(
                       onPressed: enabled
-                          ? () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => BookingScreen(
-                                    field: widget.field,
-                                    date: _selected,
-                                    startHour: h,
-                                  ),
-                                ),
-                              )
+                          ? () => _tapSlot(h, statuses)
                           : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: bg,
@@ -180,6 +232,27 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: _selStart == null
+          ? null
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => BookingScreen(
+                        field: widget.field,
+                        date: _selected,
+                        startHour: _selStart!,
+                        endHour: _selEnd!,
+                      ),
+                    ),
+                  ),
+                  child: Text(
+                      'Lanjut — $_selHours jam (${fmtRupiah(_selHours * widget.field.pricePerHour)})'),
+                ),
+              ),
+            ),
     );
   }
 
