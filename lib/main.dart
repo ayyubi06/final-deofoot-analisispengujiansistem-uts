@@ -9,8 +9,125 @@ import 'screens/profile_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  runApp(const DeofootApp());
+  runApp(const FirebaseInitGate());
+}
+
+/// Gerbang inisialisasi Firebase: kalau gagal (mis. google-services.json
+/// tidak cocok / tidak diproses plugin), tampilkan layar error yang jelas
+/// + tombol "Coba lagi". Jangan pernah biarkan layar hitam polos.
+class FirebaseInitGate extends StatefulWidget {
+  const FirebaseInitGate({super.key});
+
+  @override
+  State<FirebaseInitGate> createState() => _FirebaseInitGateState();
+}
+
+class _FirebaseInitGateState extends State<FirebaseInitGate> {
+  bool _ready = false;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _initFirebase();
+  }
+
+  Future<void> _initFirebase() async {
+    try {
+      await Firebase.initializeApp();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e);
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _ready = true);
+  }
+
+  void _retry() {
+    setState(() => _error = null);
+    _initFirebase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_ready) return const DeofootApp();
+    return MaterialApp(
+      title: 'Deofoot',
+      theme: DeofootTheme.light,
+      debugShowCheckedModeBanner: false,
+      home: _error == null
+          ? const _FirebaseLoading()
+          : _FirebaseError(error: _error.toString(), onRetry: _retry),
+    );
+  }
+}
+
+class _FirebaseLoading extends StatelessWidget {
+  const _FirebaseLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+class _FirebaseError extends StatelessWidget {
+  final String error;
+  final VoidCallback onRetry;
+
+  const _FirebaseError({required this.error, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Icon(Icons.cloud_off_outlined,
+                  size: 72, color: Colors.redAccent),
+              const SizedBox(height: 16),
+              const Text(
+                'Gagal terhubung ke server',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Aplikasi tidak bisa tersambung ke Firebase. Periksa koneksi internet, lalu coba lagi.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  error,
+                  style:
+                      const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Coba lagi'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class DeofootApp extends StatelessWidget {
