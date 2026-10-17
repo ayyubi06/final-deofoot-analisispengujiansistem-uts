@@ -17,6 +17,13 @@ class ScheduleScreen extends StatefulWidget {
 class _ScheduleScreenState extends State<ScheduleScreen> {
   DateTime _selected = DateTime.now();
 
+  @override
+  void initState() {
+    super.initState();
+    // Expire booking pending basi (>30 mnt) - fire and forget.
+    FirestoreService().expireStalePendings().then((_) {}, onError: (_) {});
+  }
+
   List<DateTime> get _days =>
       List.generate(7, (i) => DateTime.now().add(Duration(days: i)));
 

@@ -12,7 +12,20 @@
           "package_name": "com.deofoot.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "179289403270-3pbr6cbh2if15a890dlmg2h1288b9ijm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.deofoot.app",
+            "certificate_hash": "f232b748dac193b188ec8bf7386a3d26a447282e"
+          }
+        },
+        {
+          "client_id": "179289403270-10cbcvo6enl65jjifiuk18mn7mu12slk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBIYXnhdevy0RPU_R-VWSyEgPqBuyPMMbA"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "179289403270-10cbcvo6enl65jjifiuk18mn7mu12slk.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

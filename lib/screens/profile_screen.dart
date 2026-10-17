@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../main.dart';
 import '../theme.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
@@ -98,7 +99,14 @@ class ProfileScreen extends StatelessWidget {
                       TextStyle(color: DeofootTheme.danger)),
               onTap: () async {
                 await auth.signOut();
-                // AuthGate di main akan mengarahkan ke Splash.
+                // Navigasi eksplisit ke AuthGate (-> Splash), karena
+                // AuthGate tidak lagi di stack pasca-fix login.
+                if (context.mounted) {
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const AuthGate()),
+                    (_) => false,
+                  );
+                }
               },
             ),
           ),

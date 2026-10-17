@@ -8,6 +8,10 @@ import 'models.dart';
 /// - tepi bersentuhan (end == start) BUKAN konflik
 bool isOverlapping(int m1, int s1, int m2, int s2) => m1 < s2 && m2 < s1;
 
+/// Status yang membuat slot dianggap bebas / diabaikan.
+bool _isIgnored(String s) =>
+    s == 'cancelled' || s == 'rejected' || s == 'expired';
+
 /// true jika slot (fieldId, date, [startMin, endMin)) bentrok dengan
 /// booking AKTIF (pending/confirmed) lain.
 bool hasConflict(
@@ -19,7 +23,7 @@ bool hasConflict(
 ) {
   for (final b in bookings) {
     if (b.fieldId != fieldId || b.date != date) continue;
-    if (b.status == 'cancelled' || b.status == 'rejected') continue;
+    if (_isIgnored(b.status)) continue;
     if (isOverlapping(startMin, endMin, b.startMinutes, b.endMinutes)) {
       return true;
     }
@@ -31,7 +35,7 @@ bool hasConflict(
 enum SlotStatus { free, booked, pending }
 
 /// Tentukan status tiap slot 60 menit dari daftar booking.
-/// pending & confirmed → terisi; cancelled/rejected → bebas.
+/// pending & confirmed → terisi; cancelled/rejected/expired → bebas.
 Map<int, SlotStatus> slotStatuses(
   List<Booking> bookings,
   String fieldId,
@@ -43,10 +47,14 @@ Map<int, SlotStatus> slotStatuses(
   }
   for (final b in bookings) {
     if (b.fieldId != fieldId || b.date != date) continue;
-    if (b.status == 'cancelled' || b.status == 'rejected') continue;
-    final h = b.startMinutes ~/ 60;
-    if (map.containsKey(h)) {
-      map[h] = b.status == 'pending' ? SlotStatus.pending : SlotStatus.booked;
+    if (_isIgnored(b.status)) continue;
+    // Booking bisa multi-jam: tandai SEMUA jam dalam rentang.
+    final h0 = b.startMinutes ~/ 60;
+    final h1 = (b.endMinutes - 1) ~/ 60;
+    for (var h = h0; h <= h1; h++) {
+      if (map.containsKey(h)) {
+        map[h] = b.status == 'pending' ? SlotStatus.pending : SlotStatus.booked;
+      }
     }
   }
   return map;

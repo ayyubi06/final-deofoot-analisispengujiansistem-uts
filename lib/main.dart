@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'theme.dart';
 import 'services/auth_service.dart';
+import 'services/firestore_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/my_bookings_screen.dart';
@@ -42,6 +44,8 @@ class _FirebaseInitGateState extends State<FirebaseInitGate> {
     }
     if (!mounted) return;
     setState(() => _ready = true);
+    // Expire booking pending yang basi (>30 menit) - fire and forget.
+    FirestoreService().expireStalePendings().then((_) {}, onError: (_) {});
   }
 
   void _retry() {
@@ -145,13 +149,28 @@ class DeofootApp extends StatelessWidget {
 }
 
 /// Mengarahkan ke Splash (belum login) atau MainNav (sudah login).
-class AuthGate extends StatelessWidget {
+/// Stream authState dibuat SEKALI di initState agar tidak resubscribe
+/// setiap rebuild (bug: login tidak masuk dashboard tanpa buka-ulang app).
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  late final Stream<User?> _authState;
+
+  @override
+  void initState() {
+    super.initState();
+    _authState = AuthService().authState;
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder(
-      stream: AuthService().authState,
+      stream: _authState,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Scaffold(

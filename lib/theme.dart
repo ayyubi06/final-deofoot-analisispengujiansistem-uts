@@ -66,6 +66,8 @@ class DeofootTheme {
       case 'rejected':
       case 'cancelled':
         return danger;
+      case 'expired':
+        return textMuted;
       default:
         return textMuted;
     }
@@ -82,6 +84,8 @@ class DeofootTheme {
         return 'Ditolak';
       case 'cancelled':
         return 'Dibatalkan';
+      case 'expired':
+        return 'Kedaluwarsa';
       default:
         return status;
     }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../main.dart';
 import '../theme.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
@@ -48,8 +49,8 @@ class _AuthScreenState extends State<AuthScreen> {
       }
       final u = _auth.currentUser;
       if (u != null) await _fs.ensureUserDoc(u.uid, u.email ?? email);
-      // Kembali ke AuthGate (main) yang akan mengarahkan ke Beranda.
-      if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+      // Navigasi eksplisit ke MainNav (AuthGate tidak lagi di stack).
+      if (mounted) _goMain(u?.email ?? email);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -59,6 +60,13 @@ class _AuthScreenState extends State<AuthScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _goMain(String email) {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => MainNav(userEmail: email)),
+      (_) => false,
+    );
   }
 
   @override

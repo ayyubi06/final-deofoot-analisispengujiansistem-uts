@@ -128,6 +128,26 @@ class FirestoreService {
     return ref.id;
   }
 
+  /// Expire booking pending yang createdAt-nya > 30 menit.
+  /// Hanya update field status (sesuai rules). Return jumlah yang di-expire.
+  /// Dipanggil saat app start & saat buka jadwal (fire and forget).
+  Future<int> expireStalePendings() async {
+    final cutoff = DateTime.now().subtract(const Duration(minutes: 30));
+    final snap = await _db
+        .collection('bookings')
+        .where('status', isEqualTo: 'pending')
+        .get();
+    var n = 0;
+    for (final doc in snap.docs) {
+      final created = (doc.data()['createdAt'] as Timestamp?)?.toDate();
+      if (created != null && created.isBefore(cutoff)) {
+        await doc.reference.update({'status': 'expired'});
+        n++;
+      }
+    }
+    return n;
+  }
+
   /// Batalkan booking (user hanya boleh ke 'cancelled').
   Future<void> cancelBooking(String bookingId) async {
     await _db.collection('bookings').doc(bookingId).update({

@@ -28,7 +28,7 @@ class Booking {
   final String date; // yyyy-MM-dd
   final String startTime; // HH:mm
   final String endTime; // HH:mm
-  final String status; // pending | confirmed | rejected | cancelled
+  final String status; // pending | confirmed | rejected | cancelled | expired
   final String? proofBase64;
   final int totalPrice;
   final DateTime createdAt;
@@ -89,7 +89,11 @@ class Booking {
 
   /// true jika booking masuk tab "Akan datang".
   bool get isUpcoming {
-    if (status == 'cancelled' || status == 'rejected') return false;
+    if (status == 'cancelled' ||
+        status == 'rejected' ||
+        status == 'expired') {
+      return false;
+    }
     return !startDateTime.isBefore(DateTime.now());
   }
 }
