@@ -83,7 +83,7 @@ class _BookingCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Lapangan ${b.fieldName}',
+                  b.fieldName,
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -160,7 +160,7 @@ class _BookingCard extends StatelessWidget {
       builder: (_) => AlertDialog(
         title: const Text('Batalkan booking?'),
         content: Text(
-            'Booking Lapangan ${booking.fieldName} pada ${booking.date} jam ${booking.startTime} akan dibatalkan.'),
+            'Booking ${booking.fieldName} pada ${booking.date} jam ${booking.startTime} akan dibatalkan.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

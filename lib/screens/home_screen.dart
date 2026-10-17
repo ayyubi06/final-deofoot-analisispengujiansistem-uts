@@ -92,7 +92,7 @@ class _FieldCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Lapangan ${field.name}',
+                      field.name,
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,

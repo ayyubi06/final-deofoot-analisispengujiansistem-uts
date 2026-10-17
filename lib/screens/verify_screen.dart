@@ -155,7 +155,7 @@ class _PendingCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-                'Lapangan ${b.fieldName} • ${b.date} • ${b.startTime}–${b.endTime}',
+                '${b.fieldName} • ${b.date} • ${b.startTime}–${b.endTime}',
                 style:
                     const TextStyle(color: DeofootTheme.textMuted)),
             Text('Total: ${fmtRupiah(b.totalPrice)}',
