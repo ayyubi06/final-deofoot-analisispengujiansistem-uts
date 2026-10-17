@@ -252,9 +252,10 @@ class _PendingCard extends StatelessWidget {
                   : 'Booking ditolak, slot kembali bebas.')),
         );
       } catch (e) {
+        debugPrint('VerifyScreen._confirm gagal: $e');
         messenger.showSnackBar(
-          SnackBar(
-              content: Text('Gagal: $e'),
+          const SnackBar(
+              content: Text('Gagal memproses. Coba lagi.'),
               backgroundColor: DeofootTheme.danger),
         );
       }

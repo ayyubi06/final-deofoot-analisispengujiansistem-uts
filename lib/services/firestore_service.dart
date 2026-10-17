@@ -89,7 +89,8 @@ class FirestoreService {
         .map((s) => s.docs.map(Booking.fromDoc).toList());
   }
 
-  /// Buat booking dengan cek ulang anti double-booking TEPAT SEBELUM tulis.
+  /// Buat booking dengan cek ulang anti double-booking TEPAT SEBELUM tulis,
+  /// di dalam transaction (re-check + tulis atomik).
   /// Lempar [BookingConflictException] jika slot sudah terisi.
   Future<String> createBooking({
     required String userId,
@@ -110,34 +111,37 @@ class FirestoreService {
     final endTime =
         '${endHour.toString().padLeft(2, '0')}:00';
 
-    // Cek ulang: baca booking terbaru untuk lapangan+tanggal ini.
-    final snap = await _db
-        .collection('bookings')
+    final col = _db.collection('bookings');
+    final q = col
         .where('fieldId', isEqualTo: fieldId)
-        .where('date', isEqualTo: date)
-        .get();
-    final existing =
-        snap.docs.map(Booking.fromDoc).toList();
-    if (hasConflict(existing, fieldId, date, startMin, endMin)) {
-      throw BookingConflictException(
-          'Slot sudah dibooking orang lain. Silakan pilih jam lain.');
-    }
-
-    final ref = await _db.collection('bookings').add({
-      'userId': userId,
-      'userEmail': userEmail,
-      'fieldId': fieldId,
-      'fieldName': fieldName,
-      'date': date,
-      'startTime': startTime,
-      'endTime': endTime,
-      'status': 'pending',
-      'whatsapp': whatsapp,
-      'proofBase64': proofBase64,
-      'totalPrice': totalPrice,
-      'createdAt': FieldValue.serverTimestamp(),
+        .where('date', isEqualTo: date);
+    return _db.runTransaction((tx) async {
+      // Re-check tepat sebelum tulis: baca booking terbaru lapangan+tanggal.
+      // (API Transaction hanya mendukung get per-dokumen, jadi query
+      // dibaca via get() biasa tepat sebelum tx.set.)
+      final snap = await q.get();
+      final existing = snap.docs.map(Booking.fromDoc).toList();
+      if (hasConflict(existing, fieldId, date, startMin, endMin)) {
+        throw BookingConflictException(
+            'Slot sudah dibooking orang lain. Silakan pilih jam lain.');
+      }
+      final ref = col.doc();
+      tx.set(ref, {
+        'userId': userId,
+        'userEmail': userEmail,
+        'fieldId': fieldId,
+        'fieldName': fieldName,
+        'date': date,
+        'startTime': startTime,
+        'endTime': endTime,
+        'status': 'pending',
+        'whatsapp': whatsapp,
+        'proofBase64': proofBase64,
+        'totalPrice': totalPrice,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      return ref.id;
     });
-    return ref.id;
   }
 
   /// Expire booking pending yang createdAt-nya > 30 menit.
@@ -169,7 +173,9 @@ class FirestoreService {
 
   /// Admin: terima (→confirmed) / tolak (→rejected).
   Future<void> setBookingStatus(String bookingId, String status) async {
-    assert(status == 'confirmed' || status == 'rejected');
+    if (status != 'confirmed' && status != 'rejected') {
+      throw ArgumentError('Status booking tidak valid: $status');
+    }
     await _db.collection('bookings').doc(bookingId).update({
       'status': status,
     });

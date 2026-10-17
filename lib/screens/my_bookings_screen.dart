@@ -183,9 +183,10 @@ class _BookingCard extends StatelessWidget {
           const SnackBar(content: Text('Booking dibatalkan.')),
         );
       } catch (e) {
+        debugPrint('MyBookingsScreen._confirmCancel gagal: $e');
         messenger.showSnackBar(
-          SnackBar(
-              content: Text('Gagal membatalkan: $e'),
+          const SnackBar(
+              content: Text('Gagal membatalkan. Coba lagi.'),
               backgroundColor: DeofootTheme.danger),
         );
       }

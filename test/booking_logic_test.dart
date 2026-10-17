@@ -23,6 +23,29 @@ Booking _b({
       createdAt: DateTime.now(),
     );
 
+/// Booking dengan waktu mulai relatif terhadap sekarang (anti basi).
+Booking _bAt({
+  Duration fromNow = const Duration(hours: 3),
+  String status = 'pending',
+}) {
+  final dt = DateTime.now().add(fromNow);
+  final time =
+      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  return Booking(
+    id: 'x',
+    userId: 'u',
+    userEmail: 'u@x.id',
+    fieldId: 'L1',
+    fieldName: 'L1',
+    date: fmtDate(dt),
+    startTime: time,
+    endTime: time,
+    status: status,
+    totalPrice: 120000,
+    createdAt: DateTime.now(),
+  );
+}
+
 void main() {
   group('isOverlapping', () {
     test('overlap sebagian -> true', () {
@@ -96,16 +119,103 @@ void main() {
     });
   });
 
-  group('Booking.canCancel', () {
+  group('Booking.canCancel (tanggal relatif)', () {
     test('3 hari ke depan, status pending -> bisa', () {
-      // _b() default: 2026-10-20 10:00 (masa depan), status confirmed.
-      expect(_b(status: 'pending').canCancel, true);
+      expect(
+          _bAt(fromNow: const Duration(days: 3), status: 'pending')
+              .canCancel,
+          true);
+    });
+    test('lebih dari 2 jam (2j05m) -> bisa', () {
+      expect(
+          _bAt(
+                  fromNow: const Duration(hours: 2, minutes: 5),
+                  status: 'confirmed')
+              .canCancel,
+          true);
+    });
+    test('batas: tepat 2 jam -> TIDAK bisa', () {
+      expect(
+          _bAt(
+                  fromNow: const Duration(hours: 2),
+                  status: 'pending')
+              .canCancel,
+          false);
+    });
+    test('kurang dari 2 jam (1j59m) -> TIDAK bisa', () {
+      expect(
+          _bAt(
+                  fromNow:
+                      const Duration(hours: 1, minutes: 59),
+                  status: 'pending')
+              .canCancel,
+          false);
     });
     test('status cancelled -> tidak bisa', () {
-      expect(_b(status: 'cancelled').canCancel, false);
+      expect(_bAt(status: 'cancelled').canCancel, false);
     });
     test('status rejected -> tidak bisa', () {
-      expect(_b(status: 'rejected').canCancel, false);
+      expect(_bAt(status: 'rejected').canCancel, false);
+    });
+    test('status expired -> tidak bisa', () {
+      expect(_bAt(status: 'expired').canCancel, false);
+    });
+  });
+
+  group('status expired diperlakukan seperti cancelled/rejected', () {
+    test('hasConflict mengabaikan expired', () {
+      expect(
+          hasConflict(
+              [_b(status: 'expired')], 'L1', '2026-10-20', 600, 660),
+          false);
+    });
+    test('slotStatuses mengabaikan expired', () {
+      final m = slotStatuses(
+        [_b(start: '10:00', end: '11:00', status: 'expired')],
+        'L1',
+        '2026-10-20',
+      );
+      expect(m[10], SlotStatus.free);
+    });
+    test('isUpcoming false untuk expired', () {
+      expect(_bAt(status: 'expired').isUpcoming, false);
+    });
+  });
+
+  group('slotStatuses multi-jam', () {
+    test('booking 10:00-12:00 menandai jam 10 dan 11', () {
+      final m = slotStatuses(
+        [_b(start: '10:00', end: '12:00', status: 'confirmed')],
+        'L1',
+        '2026-10-20',
+      );
+      expect(m[10], SlotStatus.booked);
+      expect(m[11], SlotStatus.booked);
+      expect(m[12], SlotStatus.free);
+    });
+    test('booking pending 2 jam -> pending di kedua jam', () {
+      final m = slotStatuses(
+        [_b(start: '14:00', end: '16:00', status: 'pending')],
+        'L1',
+        '2026-10-20',
+      );
+      expect(m[14], SlotStatus.pending);
+      expect(m[15], SlotStatus.pending);
+    });
+  });
+
+  group('isValidWhatsapp', () {
+    test('format 08 valid -> true', () {
+      expect(isValidWhatsapp('081234567890'), true);
+      expect(isValidWhatsapp(' 08123456789 '), true);
+    });
+    test('terlalu pendek / kosong -> false', () {
+      expect(isValidWhatsapp(''), false);
+      expect(isValidWhatsapp('08123'), false);
+    });
+    test('tidak diawali 08 / ada huruf -> false', () {
+      expect(isValidWhatsapp('628123456789'), false);
+      expect(isValidWhatsapp('08abc123456'), false);
     });
   });
 }
