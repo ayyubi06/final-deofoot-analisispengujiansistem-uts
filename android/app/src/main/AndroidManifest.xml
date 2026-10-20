@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="deofoot_mvp"
+        android:label="Deofoot"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -30,6 +30,10 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Receiver notifikasi terjadwal (flutter_local_notifications).
+             Boot receiver SENGAJA tidak dipasang (SPEK-V04 Fase A):
+             rekonsiliasi pengingat berjalan setiap aplikasi dibuka. -->
+        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

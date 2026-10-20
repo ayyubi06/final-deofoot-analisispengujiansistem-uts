@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'theme.dart';
 import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
+import 'services/notification_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/my_bookings_screen.dart';
@@ -46,6 +47,8 @@ class _FirebaseInitGateState extends State<FirebaseInitGate> {
     setState(() => _ready = true);
     // Expire booking pending yang basi (>30 menit) - fire and forget.
     FirestoreService().expireStalePendings().then((_) {}, onError: (_) {});
+    // Notifikasi lokal (Fase A): init plugin + minta izin - fire and forget.
+    NotificationService().mintaIzin().then((_) {}, onError: (_) {});
   }
 
   void _retry() {
@@ -194,8 +197,39 @@ class MainNav extends StatefulWidget {
   State<MainNav> createState() => _MainNavState();
 }
 
-class _MainNavState extends State<MainNav> {
+class _MainNavState extends State<MainNav> with WidgetsBindingObserver {
   int _idx = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Ketuk notifikasi → buka tab Booking Saya.
+    NotificationService.onTap = (_) {
+      if (mounted) setState(() => _idx = 1);
+    };
+    // Rekonsiliasi pengingat lokal setiap aplikasi dibuka (Fase A).
+    _rekonsiliasi();
+  }
+
+  void _rekonsiliasi() {
+    final uid = AuthService().currentUser?.uid;
+    if (uid != null) {
+      NotificationService().rekonsiliasiUntukUser(uid);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _rekonsiliasi();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    NotificationService.onTap = null;
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

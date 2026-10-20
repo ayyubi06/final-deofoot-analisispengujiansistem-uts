@@ -4,20 +4,25 @@ import '../models.dart';
 import '../booking_logic.dart';
 import '../services/firestore_service.dart';
 import 'booking_screen.dart';
+import 'recurring_screen.dart';
 
 /// Layar 4 — Jadwal lapangan: date picker 60 hari + grid slot 08.00–22.00.
 /// Tap slot hijau → pilih; tap yang terpilih → batalkan.
 /// Seleksi selalu satu blok berurutan.
 class ScheduleScreen extends StatefulWidget {
   final Field field;
-  const ScheduleScreen({super.key, required this.field});
+
+  /// Tanggal awal yang dipilih (mis. dari Pencarian Slot, Fase D).
+  /// Di luar rentang 60 hari → kembali ke hari ini.
+  final DateTime? initialDate;
+  const ScheduleScreen({super.key, required this.field, this.initialDate});
 
   @override
   State<ScheduleScreen> createState() => _ScheduleScreenState();
 }
 
 class _ScheduleScreenState extends State<ScheduleScreen> {
-  DateTime _selected = DateTime.now();
+  late DateTime _selected;
   SlotSelection _sel = const SlotSelection.empty();
 
   List<DateTime> get _days => bookingDateRange(DateTime.now());
@@ -25,6 +30,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final awal = widget.initialDate;
+    if (awal == null) {
+      _selected = now;
+    } else {
+      final d = DateTime(awal.year, awal.month, awal.day);
+      _selected = (d.isBefore(today) ||
+              d.isAfter(today.add(const Duration(days: 59))))
+          ? today
+          : d;
+    }
     // Expire booking pending basi (>30 mnt) - fire and forget.
     FirestoreService().expireStalePendings().then((_) {}, onError: (_) {});
   }
@@ -44,8 +61,42 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   Widget build(BuildContext context) {
     final fs = FirestoreService();
     final dateStr = fmtDate(_selected);
+    // Lapangan nonaktif tidak bisa dibooking (Fase C).
+    if (!widget.field.isActive) {
+      return Scaffold(
+        appBar: AppBar(title: Text('Jadwal — ${widget.field.name}')),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'Lapangan ini sedang nonaktif dan tidak menerima booking.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: DeofootTheme.textMuted),
+            ),
+          ),
+        ),
+      );
+    }
     return Scaffold(
-      appBar: AppBar(title: Text('Jadwal — ${widget.field.name}')),
+      appBar: AppBar(
+        title: Text('Jadwal — ${widget.field.name}'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.repeat),
+            tooltip: 'Langganan rutin',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => RecurringScreen(
+                  field: widget.field,
+                  initialDate: _selected,
+                  initialStartHour: _sel.isEmpty ? null : _sel.start,
+                  initialDuration: _sel.isEmpty ? null : _sel.hours,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           // Aksen warna identitas lapangan.
@@ -151,7 +202,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 final statuses = slotStatuses(
-                    snap.data ?? [], widget.field.id, dateStr);
+                  snap.data ?? [],
+                  widget.field.id,
+                  dateStr,
+                  openHour: widget.field.openHour,
+                  closeHour: widget.field.closeHour,
+                );
                 final now = DateTime.now();
                 return GridView.builder(
                   padding: const EdgeInsets.all(16),
@@ -162,9 +218,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     crossAxisSpacing: 10,
                     mainAxisSpacing: 10,
                   ),
-                  itemCount: 14,
+                  itemCount:
+                      widget.field.closeHour - widget.field.openHour,
                   itemBuilder: (context, i) {
-                    final h = 8 + i;
+                    final h = widget.field.openHour + i;
                     final st = statuses[h] ?? SlotStatus.free;
                     final past =
                         isPastSlot(_selected, h, now) && st == SlotStatus.free;

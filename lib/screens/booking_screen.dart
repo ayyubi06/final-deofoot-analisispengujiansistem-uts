@@ -8,6 +8,7 @@ import '../models.dart';
 import '../booking_logic.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../services/notification_service.dart';
 
 /// Layar 5 — Booking 4 langkah: ringkasan → WA → bayar → bukti transfer.
 /// Mendukung slot berurutan multi-jam dalam 1 transaksi.
@@ -121,7 +122,10 @@ class _BookingScreenState extends State<BookingScreen> {
         whatsapp: _waCtrl.text.trim(),
         proofBase64: b64,
         totalPrice: _total,
+        pricePerHour: widget.field.pricePerHour,
       );
+      // Jadwalkan pengingat bayar untuk booking baru (Fase A).
+      NotificationService().rekonsiliasiUntukUser(u.uid);
       if (!mounted) return;
       // Kembali ke Beranda + snackbar sukses.
       Navigator.of(context).popUntil((r) => r.isFirst);

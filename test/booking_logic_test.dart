@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:deofoot_mvp/booking_logic.dart';
-import 'package:deofoot_mvp/models.dart';
+import 'package:deofoot/booking_logic.dart';
+import 'package:deofoot/models.dart';
 
 Booking _b({
   String fieldId = 'L1',

@@ -1,0 +1,143 @@
+rules_version = '2';
+
+// =====================================================================
+// USULAN Firestore Rules v0.4 — BELUM DIPUBLISH — JANGAN DEPLOY.
+// Disusun marco (2026-10-21) sebagai bahan review keamanan inka.
+//
+// Dasar: pola akses aplikasi saat ini (lib/services/firestore_service.dart)
+// di atas rules produksi yang berjalan. Bagian yang berubah/ditambah
+// untuk v0.4 ditandai [v0.4]. Publish HANYA setelah inka membandingkan
+// file ini baris-per-baris dengan rules live di Firebase Console dan
+// tuan muda menyetujui rilisnya.
+//
+// Ringkasan perubahan:
+// 1. [C] fields: admin boleh create/update (nama, harga, kategori,
+//    warna, isActive, scheduleGrid). Delete tetap dilarang.
+// 2. [C] bookings.create: field baru pricePerHour (snapshot harga).
+// 3. [E] bookings.create: field baru seriesId (pertemuan seri).
+// 4. [E] BARU: koleksi subscriptions (seri langganan).
+// 5. [CATATAN] klausul expire: aplikasi (expireStalePendings) mengubah
+//    booking pending siapa pun yang berumur > 30 menit menjadi
+//    'expired' dari sisi klien. Klausul itu dipertahankan di bawah
+//    dengan batas ketat — inka WAJIB memverifikasi klausul produksi
+//    saat ini memang mengizinkan perilaku ini, dan menilai risikonya.
+// =====================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // --- Lapangan ---------------------------------------------------
+    // Produksi: read-only untuk semua orang.
+    // [v0.4 - Fase C] admin boleh menulis (kelola lapangan dari app).
+    match /fields/{fieldId} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // --- Config (pembayaran, dll.) ----------------------------------
+    match /config/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // --- Users --------------------------------------------------------
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid) || isAdmin();
+      allow delete: if false;
+    }
+
+    // --- Bookings -----------------------------------------------------
+    match /bookings/{bookingId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+
+      // [v0.4] hasOnly ditambah 'pricePerHour' (C) dan 'seriesId' (E).
+      allow create: if isOwner(request.resource.data.userId)
+        && request.resource.data.status == 'pending'
+        && request.resource.data.keys().hasOnly([
+             'userId', 'userEmail', 'fieldId', 'fieldName', 'date',
+             'startTime', 'endTime', 'status', 'whatsapp', 'proofBase64',
+             'totalPrice', 'pricePerHour', 'seriesId', 'createdAt'
+           ]);
+
+      allow update: if
+        // Admin: verifikasi (confirmed/rejected), termasuk propagasi
+        // status seri ke booking pertemuan (E).
+        isAdmin()
+        // User: hanya membatalkan bookingnya sendiri (status saja).
+        || (isOwner(resource.data.userId)
+            && request.resource.data.status == 'cancelled'
+            && request.resource.data.diff(resource.data)
+                 .affectedKeys().hasOnly(['status']))
+        // [CATATAN — verifikasi ke rules live] Expire pending basi:
+        // user mana pun yang membuka aplikasi menandai booking pending
+        // berumur > 30 menit sebagai 'expired' (hanya field status).
+        || (signedIn()
+            && resource.data.status == 'pending'
+            && request.resource.data.status == 'expired'
+            && request.resource.data.diff(resource.data)
+                 .affectedKeys().hasOnly(['status'])
+            && request.time > resource.data.createdAt + duration.value(30, 'm'));
+
+      allow delete: if false;
+    }
+
+    // --- Seri langganan [v0.4 BARU - Fase E] --------------------------
+    match /subscriptions/{seriesId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+
+      allow create: if isOwner(request.resource.data.userId)
+        && request.resource.data.status == 'pending'
+        && request.resource.data.meetingsTotal >= 1
+        && request.resource.data.meetingsTotal <= 52
+        && request.resource.data.meetingDates.size()
+             == request.resource.data.meetingsTotal
+        && request.resource.data.proofBase64 is string
+        && request.resource.data.keys().hasOnly([
+             'userId', 'userEmail', 'fieldId', 'fieldName', 'weekday',
+             'startTime', 'endTime', 'pricePerHour', 'totalPerMeeting',
+             'meetingsTotal', 'startDate', 'endDate', 'meetingDates',
+             'whatsapp', 'proofBase64', 'status',
+             'cancelledMeetingDates', 'createdAt'
+           ]);
+
+      allow update: if
+        // Admin: verifikasi per seri (status → confirmed/rejected).
+        isAdmin()
+        // User pemilik seri, salah satu dari:
+        || (isOwner(resource.data.userId)
+            && (
+              // (a) batalkan sisa seri: hanya status → 'cancelled';
+              (request.resource.data.status == 'cancelled'
+               && request.resource.data.diff(resource.data)
+                    .affectedKeys().hasOnly(['status']))
+              ||
+              // (b) catat tanggal pertemuan yang dibatalkan:
+              //     hanya cancelledMeetingDates, hanya bertambah,
+              //     status tidak berubah.
+              (request.resource.data.status == resource.data.status
+               && request.resource.data.diff(resource.data)
+                    .affectedKeys().hasOnly(['cancelledMeetingDates'])
+               && request.resource.data.cancelledMeetingDates.size()
+                    >= resource.data.cancelledMeetingDates.size())
+            ));
+
+      allow delete: if false;
+    }
+  }
+}

@@ -4,6 +4,7 @@ import '../models.dart';
 import '../booking_logic.dart';
 import '../services/firestore_service.dart';
 import 'schedule_screen.dart';
+import 'slot_search_screen.dart';
 
 /// Layar 3 — Beranda: sapaan + tab kategori + kartu lapangan berfoto.
 class HomeScreen extends StatefulWidget {
@@ -33,6 +34,15 @@ class _HomeScreenState extends State<HomeScreen> {
             const Text('Deofoot'),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: 'Cari slot kosong',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SlotSearchScreen()),
+            ),
+          ),
+        ],
       ),
       body: StreamBuilder<List<Field>>(
         stream: fs.watchFields(),
@@ -46,9 +56,11 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Text('Data lapangan belum tersedia.'),
             );
           }
+          // Lapangan nonaktif disembunyikan dari user (Fase C).
+          final aktif = fields.where((f) => f.isActive).toList();
           final shown = _tab == 'Semua'
-              ? fields
-              : fields.where((f) => f.category == _tab).toList();
+              ? aktif
+              : aktif.where((f) => f.category == _tab).toList();
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -225,8 +237,9 @@ class _FieldCard extends StatelessWidget {
                     stream: fs.watchBookings(field.id, date),
                     builder: (context, snap) {
                       final bookings = snap.data ?? [];
-                      final statuses =
-                          slotStatuses(bookings, field.id, date);
+                      final statuses = slotStatuses(bookings, field.id, date,
+                          openHour: field.openHour,
+                          closeHour: field.closeHour);
                       final free = statuses.values
                           .where((s) => s == SlotStatus.free)
                           .length;

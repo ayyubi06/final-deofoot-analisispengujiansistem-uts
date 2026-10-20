@@ -37,13 +37,17 @@ enum SlotStatus { free, booked, pending }
 
 /// Tentukan status tiap slot 60 menit dari daftar booking.
 /// pending & confirmed → terisi; cancelled/rejected/expired → bebas.
+/// Rentang jam mengikuti grid lapangan (Fase C); bawaan 08–22 seperti
+/// perilaku lama untuk dokumen tanpa scheduleGrid.
 Map<int, SlotStatus> slotStatuses(
   List<Booking> bookings,
   String fieldId,
-  String date,
-) {
+  String date, {
+  int openHour = 8,
+  int closeHour = 22,
+}) {
   final map = <int, SlotStatus>{};
-  for (var h = 8; h < 22; h++) {
+  for (var h = openHour; h < closeHour; h++) {
     map[h] = SlotStatus.free;
   }
   for (final b in bookings) {

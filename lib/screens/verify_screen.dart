@@ -3,47 +3,273 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../models.dart';
 import '../booking_logic.dart';
+import '../report_logic.dart' show namaHari;
 import '../services/firestore_service.dart';
 
-/// Layar 8 — Verifikasi (admin): list booking pending + Terima/Tolak.
+/// Layar 8 — Verifikasi (admin): list booking pending + Terima/Tolak,
+/// dan seri langganan pending + Terima/Tolak per seri (Fase E).
 class VerifyScreen extends StatelessWidget {
   const VerifyScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final fs = FirestoreService();
     return Scaffold(
       appBar: AppBar(title: const Text('Verifikasi Pembayaran')),
       body: Column(
         children: [
           const _Dashboard(),
           Expanded(
-            child: StreamBuilder<List<Booking>>(
-              stream: fs.watchPending(),
-              builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final items = snap.data ?? [];
-          if (items.isEmpty) {
-            return const Center(
-              child: Text('Tidak ada booking menunggu verifikasi.',
-                  style:
-                      TextStyle(color: DeofootTheme.textMuted)),
-            );
-          }
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: items.length,
-                  itemBuilder: (_, i) =>
-                      _PendingCard(booking: items[i]),
-                );
-              },
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: const [
+                _SectionTitle('Booking menunggu'),
+                _PendingBookings(),
+                SizedBox(height: 8),
+                _SectionTitle('Langganan menunggu'),
+                _PendingSeries(),
+              ],
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String text;
+  const _SectionTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: DeofootTheme.primary,
+        ),
+      ),
+    );
+  }
+}
+
+class _PendingBookings extends StatelessWidget {
+  const _PendingBookings();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<Booking>>(
+      stream: FirestoreService().watchPending(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final items = snap.data ?? [];
+        if (items.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: Text('Tidak ada booking menunggu verifikasi.',
+                style: TextStyle(color: DeofootTheme.textMuted)),
+          );
+        }
+        return Column(
+          children: [for (final b in items) _PendingCard(booking: b)],
+        );
+      },
+    );
+  }
+}
+
+class _PendingSeries extends StatelessWidget {
+  const _PendingSeries();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<SubscriptionSeries>>(
+      stream: FirestoreService().watchPendingSeries(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final items = snap.data ?? [];
+        if (items.isEmpty) {
+          return const Text('Tidak ada langganan menunggu verifikasi.',
+              style: TextStyle(color: DeofootTheme.textMuted));
+        }
+        return Column(
+          children: [for (final s in items) _SeriesCard(series: s)],
+        );
+      },
+    );
+  }
+}
+
+/// Kartu seri langganan pending: Terima/Tolak berlaku untuk SELURUH
+/// seri; booking pertemuan yang masih pending mengikuti (Fase E).
+class _SeriesCard extends StatelessWidget {
+  final SubscriptionSeries series;
+  const _SeriesCard({required this.series});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = series;
+    Widget thumb;
+    if (s.proofBase64 != null && s.proofBase64!.isNotEmpty) {
+      try {
+        thumb = ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.memory(
+            base64Decode(s.proofBase64!),
+            height: 120,
+            width: double.infinity,
+            fit: BoxFit.cover,
+          ),
+        );
+      } catch (_) {
+        thumb = _noProof();
+      }
+    } else {
+      thumb = _noProof();
+    }
+    final hari = s.meetingDates.isNotEmpty
+        ? namaHari(DateTime.parse(s.meetingDates.first))
+        : '-';
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.repeat,
+                    size: 18, color: DeofootTheme.accent),
+                const SizedBox(width: 6),
+                const Text('Langganan rutin',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                const Spacer(),
+                Text('${s.meetingsTotal} pertemuan',
+                    style: const TextStyle(color: DeofootTheme.textMuted)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            thumb,
+            const SizedBox(height: 12),
+            Text(s.userEmail,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Text('WA: ${s.whatsapp.isEmpty ? '-' : s.whatsapp}',
+                style: const TextStyle(
+                    fontSize: 13, color: DeofootTheme.textMuted)),
+            const SizedBox(height: 4),
+            Text(
+              '${s.fieldName} • setiap $hari ${s.startTime}–${s.endTime}',
+              style: const TextStyle(color: DeofootTheme.textMuted),
+            ),
+            Text(
+              '${s.startDate} s/d ${s.endDate} • Total: ${fmtRupiah(s.totalHarga)}',
+              style: const TextStyle(color: DeofootTheme.textMuted),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => _confirm(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: DeofootTheme.available,
+                      minimumSize: const Size(0, 44),
+                    ),
+                    child: const Text('Terima seri'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => _confirm(context, false),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: DeofootTheme.danger,
+                      side: const BorderSide(color: DeofootTheme.danger),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      minimumSize: const Size(0, 44),
+                    ),
+                    child: const Text('Tolak seri'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _noProof() => Container(
+        height: 80,
+        decoration: BoxDecoration(
+          color: DeofootTheme.background,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Center(
+          child: Text('Bukti tidak tersedia',
+              style: TextStyle(color: DeofootTheme.textMuted)),
+        ),
+      );
+
+  Future<void> _confirm(BuildContext context, bool terima) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(terima ? 'Terima seri langganan?' : 'Tolak seri langganan?'),
+        content: Text(
+          terima
+              ? 'Seluruh seri ${series.userEmail} (${series.fieldName}, ${series.meetingsTotal} pertemuan) akan DISETUJUI; semua pertemuannya ikut aktif.'
+              : 'Seluruh seri ${series.userEmail} (${series.fieldName}, ${series.meetingsTotal} pertemuan) akan DITOLAK dan semua slotnya kembali bebas.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor:
+                  terima ? DeofootTheme.available : DeofootTheme.danger,
+            ),
+            child: Text(terima ? 'Ya, terima' : 'Ya, tolak'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && context.mounted) {
+      final messenger = ScaffoldMessenger.of(context);
+      try {
+        await FirestoreService().setSeriesStatus(
+          series.id,
+          terima ? 'confirmed' : 'rejected',
+        );
+        messenger.showSnackBar(
+          SnackBar(
+              content: Text(terima
+                  ? 'Seri disetujui, semua pertemuan aktif.'
+                  : 'Seri ditolak, semua slot kembali bebas.')),
+        );
+      } catch (e) {
+        debugPrint('VerifyScreen._SeriesCard._confirm gagal: $e');
+        messenger.showSnackBar(
+          const SnackBar(
+              content: Text('Gagal memproses. Coba lagi.'),
+              backgroundColor: DeofootTheme.danger),
+        );
+      }
+    }
   }
 }
 
