@@ -64,7 +64,7 @@ service cloud.firestore {
         // ada, dan seri itu milik pembuat booking ini.
         && (!('seriesId' in request.resource.data)
             || (request.resource.data.seriesId is string
-                && get(/databases/$(database)/documents/subscriptions/$(request.resource.data.seriesId)).data.userId == request.auth.uid));
+                && getAfter(/databases/$(database)/documents/subscriptions/$(request.resource.data.seriesId)).data.userId == request.auth.uid));
       allow update: if request.auth != null && (
         (request.auth.uid == resource.data.userId
          && request.resource.data.status == 'cancelled'
