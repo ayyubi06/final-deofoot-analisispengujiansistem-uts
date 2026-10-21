@@ -128,4 +128,3 @@ Pemisahan ini membuat aturan bisnis dapat diuji secara unit tanpa emulator maupu
 2. `flutter run` (perangkat Android / emulator, min. API 34 untuk pengujian kami)
 3. Masuk dengan akun terdaftar; fitur admin hanya muncul pada akun berpenanda `isAdmin`.
 
-*Project ini didemonstrasikan pada waktu UTS sesuai ketentuan pengumpulan.*
