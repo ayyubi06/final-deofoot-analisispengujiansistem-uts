@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'theme.dart';
 import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
@@ -12,6 +13,9 @@ import 'screens/profile_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Fase G: font Plus Jakarta Sans dibundel sebagai aset lokal
+  // (assets/fonts/) — jangan pernah unduh font saat runtime.
+  GoogleFonts.config.allowRuntimeFetching = false;
   runApp(const FirebaseInitGate());
 }
 

@@ -1,7 +1,7 @@
 name: deofoot
 description: "Aplikasi booking lapangan Deofoot."
 publish_to: 'none'
-version: 1.4.1+6
+version: 1.5.0+7
 
 environment:
   sdk: ^3.13.5
@@ -15,6 +15,7 @@ dependencies:
   cloud_firestore: ^7.0.0
   image_picker: ^1.2.4
   google_sign_in: ^6.3.0
+  google_fonts: ^6.2.1
   flutter_local_notifications: ^22.3.2
   pdf: ^3.13.1
   printing: ^5.15.1
@@ -32,6 +33,7 @@ flutter:
   assets:
     - assets/deofoot-logo.png
     - assets/images/fields/
+    - assets/fonts/
 
 flutter_launcher_icons:
   android: true
