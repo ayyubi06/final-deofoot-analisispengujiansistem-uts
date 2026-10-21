@@ -256,6 +256,16 @@ class FirestoreService {
     });
   }
 
+  /// Semua booking pertemuan milik satu seri — untuk rincian seri
+  /// di layar Verifikasi (micro-fix v0.4.1, Addendum 4).
+  Stream<List<Booking>> watchBookingsBySeries(String seriesId) {
+    return _db
+        .collection('bookings')
+        .where('seriesId', isEqualTo: seriesId)
+        .snapshots()
+        .map((s) => s.docs.map(Booking.fromDoc).toList());
+  }
+
   /// Buat seri langganan + semua booking pertemuannya dalam SATU
   /// transaction (all-or-nothing): seluruh tanggal dicek ulang tepat
   /// sebelum tulis; satu saja bentrok → [SeriesConflictException] dan

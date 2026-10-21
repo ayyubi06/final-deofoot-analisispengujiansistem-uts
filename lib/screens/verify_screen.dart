@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../models.dart';
 import '../booking_logic.dart';
-import '../report_logic.dart' show namaHari;
+import '../verify_logic.dart';
+import '../report_logic.dart' show namaHari, tanggalIndonesia;
 import '../services/firestore_service.dart';
 
-/// Layar 8 — Verifikasi (admin): list booking pending + Terima/Tolak,
-/// dan seri langganan pending + Terima/Tolak per seri (Fase E).
+/// Layar 8 — Verifikasi (admin): list booking pending individual +
+/// Terima/Tolak, dan seri langganan pending yang dikonfirmasi SATU
+/// kali per seri lewat rincian seri (Fase E + Addendum 4 SPEK-V04).
 class VerifyScreen extends StatelessWidget {
   const VerifyScreen({super.key});
 
@@ -67,7 +69,9 @@ class _PendingBookings extends StatelessWidget {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        final items = snap.data ?? [];
+        // Pertemuan seri TIDAK tampil di sini — seri dikonfirmasi
+        // satu kali lewat kartu seri (Addendum 4).
+        final items = bookingVerifikasiIndividual(snap.data ?? []);
         if (items.isEmpty) {
           return const Padding(
             padding: EdgeInsets.only(bottom: 12),
@@ -107,8 +111,9 @@ class _PendingSeries extends StatelessWidget {
   }
 }
 
-/// Kartu seri langganan pending: Terima/Tolak berlaku untuk SELURUH
-/// seri; booking pertemuan yang masih pending mengikuti (Fase E).
+/// Kartu ringkas seri langganan pending (Addendum 4): pemesan,
+/// lapangan, pola hari + jam, jumlah pertemuan, total seri.
+/// Diketuk -> rincian seri; konfirmasi HANYA dari rincian itu.
 class _SeriesCard extends StatelessWidget {
   final SubscriptionSeries series;
   const _SeriesCard({required this.series});
@@ -116,121 +121,296 @@ class _SeriesCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = series;
-    Widget thumb;
-    if (s.proofBase64 != null && s.proofBase64!.isNotEmpty) {
-      try {
-        thumb = ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.memory(
-            base64Decode(s.proofBase64!),
-            height: 120,
-            width: double.infinity,
-            fit: BoxFit.cover,
-          ),
-        );
-      } catch (_) {
-        thumb = _noProof();
-      }
-    } else {
-      thumb = _noProof();
-    }
     final hari = s.meetingDates.isNotEmpty
         ? namaHari(DateTime.parse(s.meetingDates.first))
         : '-';
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.repeat,
-                    size: 18, color: DeofootTheme.accent),
-                const SizedBox(width: 6),
-                const Text('Langganan rutin',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                const Spacer(),
-                Text('${s.meetingsTotal} pertemuan',
-                    style: const TextStyle(color: DeofootTheme.textMuted)),
-              ],
-            ),
-            const SizedBox(height: 12),
-            thumb,
-            const SizedBox(height: 12),
-            Text(s.userEmail,
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            Text('WA: ${s.whatsapp.isEmpty ? '-' : s.whatsapp}',
-                style: const TextStyle(
-                    fontSize: 13, color: DeofootTheme.textMuted)),
-            const SizedBox(height: 4),
-            Text(
-              '${s.fieldName} • setiap $hari ${s.startTime}–${s.endTime}',
-              style: const TextStyle(color: DeofootTheme.textMuted),
-            ),
-            Text(
-              '${s.startDate} s/d ${s.endDate} • Total: ${fmtRupiah(s.totalHarga)}',
-              style: const TextStyle(color: DeofootTheme.textMuted),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => _confirm(context, true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: DeofootTheme.available,
-                      minimumSize: const Size(0, 44),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => SeriesDetailScreen(series: s),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.repeat,
+                            size: 18, color: DeofootTheme.accent),
+                        const SizedBox(width: 6),
+                        const Text('Langganan rutin',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        const Spacer(),
+                        Text('${s.meetingsTotal} pertemuan',
+                            style: const TextStyle(
+                                color: DeofootTheme.textMuted)),
+                      ],
                     ),
-                    child: const Text('Terima seri'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => _confirm(context, false),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: DeofootTheme.danger,
-                      side: const BorderSide(color: DeofootTheme.danger),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      minimumSize: const Size(0, 44),
+                    const SizedBox(height: 8),
+                    Text(s.userEmail,
+                        style:
+                            const TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${s.fieldName} \u2022 setiap $hari ${s.startTime}\u2013${s.endTime}',
+                      style: const TextStyle(color: DeofootTheme.textMuted),
                     ),
-                    child: const Text('Tolak seri'),
-                  ),
+                    const SizedBox(height: 4),
+                    Text('Total: ${fmtRupiah(s.totalHarga)}',
+                        style:
+                            const TextStyle(fontWeight: FontWeight.w600)),
+                  ],
                 ),
-              ],
-            ),
-          ],
+              ),
+              const Icon(Icons.chevron_right,
+                  color: DeofootTheme.textMuted),
+            ],
+          ),
         ),
       ),
     );
   }
+}
 
-  Widget _noProof() => Container(
-        height: 80,
-        decoration: BoxDecoration(
-          color: DeofootTheme.background,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Center(
-          child: Text('Bukti tidak tersedia',
-              style: TextStyle(color: DeofootTheme.textMuted)),
-        ),
+/// Layar Rincian Langganan (Addendum 4): bukti bayar seri + daftar
+/// semua pertemuan beserta statusnya; Terima/Tolak seri SATU kali
+/// dari sini -> setSeriesStatus yang sudah ada (atomik; pertemuan
+/// cancelled tidak ikut berubah).
+class SeriesDetailScreen extends StatelessWidget {
+  final SubscriptionSeries series;
+  const SeriesDetailScreen({super.key, required this.series});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Rincian Langganan')),
+      body: StreamBuilder<List<Booking>>(
+        stream: FirestoreService().watchBookingsBySeries(series.id),
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final meetings = pertemuanSeriUrut(snap.data ?? []);
+          return SeriesDetailView(
+            series: series,
+            meetings: meetings,
+            onDecision: (terima) => _proses(context, terima),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _proses(BuildContext context, bool terima) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    try {
+      await FirestoreService().setSeriesStatus(
+        series.id,
+        terima ? 'confirmed' : 'rejected',
       );
+      navigator.pop();
+      messenger.showSnackBar(
+        SnackBar(
+            content: Text(terima
+                ? 'Seri disetujui, semua pertemuan aktif.'
+                : 'Seri ditolak, semua slot kembali bebas.')),
+      );
+    } catch (e) {
+      debugPrint('SeriesDetailScreen._proses gagal: $e');
+      messenger.showSnackBar(
+        const SnackBar(
+            content: Text('Gagal memproses. Coba lagi.'),
+            backgroundColor: DeofootTheme.danger),
+      );
+    }
+  }
+}
+
+/// Isi rincian seri (presentasional murni — data diberikan, keputusan
+/// dikembalikan lewat [onDecision]): pemesan + WA, bukti bayar seri,
+/// info pola, daftar pertemuan + status, total, dan tombol
+/// Terima/Tolak seri dengan dialog konfirmasi.
+class SeriesDetailView extends StatelessWidget {
+  final SubscriptionSeries series;
+  final List<Booking> meetings;
+  final ValueChanged<bool> onDecision;
+  const SeriesDetailView({
+    super.key,
+    required this.series,
+    required this.meetings,
+    required this.onDecision,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final s = series;
+    final hari = s.meetingDates.isNotEmpty
+        ? namaHari(DateTime.parse(s.meetingDates.first))
+        : '-';
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _bukti(),
+        const SizedBox(height: 12),
+        Text(s.userEmail,
+            style: const TextStyle(
+                fontSize: 16, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            const Icon(Icons.chat_outlined,
+                size: 14, color: DeofootTheme.textMuted),
+            const SizedBox(width: 4),
+            Text('WA: ${s.whatsapp.isEmpty ? '-' : s.whatsapp}',
+                style: const TextStyle(
+                    fontSize: 13, color: DeofootTheme.textMuted)),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${s.fieldName} \u2022 setiap $hari ${s.startTime}\u2013${s.endTime}',
+          style: const TextStyle(color: DeofootTheme.textMuted),
+        ),
+        Text(
+          '${s.startDate} s/d ${s.endDate} \u2022 ${s.meetingsTotal} pertemuan',
+          style: const TextStyle(color: DeofootTheme.textMuted),
+        ),
+        const SizedBox(height: 16),
+        const Text('Daftar pertemuan',
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: DeofootTheme.primary)),
+        const SizedBox(height: 8),
+        if (meetings.isEmpty)
+          const Text('Belum ada data pertemuan.',
+              style: TextStyle(color: DeofootTheme.textMuted))
+        else
+          for (final b in meetings)
+            Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                dense: true,
+                title: Text(
+                    '${tanggalIndonesia(DateTime.parse(b.date))} \u2022 ${b.startTime}\u2013${b.endTime}'),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: DeofootTheme.statusColor(b.status),
+                      radius: 5,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(DeofootTheme.statusLabel(b.status),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Total seri',
+                style: TextStyle(color: DeofootTheme.textMuted)),
+            Text(fmtRupiah(s.totalHarga),
+                style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: DeofootTheme.primary)),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => _confirm(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: DeofootTheme.available,
+                  minimumSize: const Size(0, 48),
+                ),
+                child: const Text('Terima seri'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => _confirm(context, false),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: DeofootTheme.danger,
+                  side: const BorderSide(color: DeofootTheme.danger),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  minimumSize: const Size(0, 48),
+                ),
+                child: const Text('Tolak seri'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _bukti() {
+    final s = series;
+    if (s.proofBase64 != null && s.proofBase64!.isNotEmpty) {
+      try {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.memory(
+            base64Decode(s.proofBase64!),
+            height: 200,
+            width: double.infinity,
+            fit: BoxFit.cover,
+          ),
+        );
+      } catch (_) {
+        // jatuh ke placeholder di bawah
+      }
+    }
+    return Container(
+      height: 80,
+      decoration: BoxDecoration(
+        color: DeofootTheme.background,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Center(
+        child: Text('Bukti tidak tersedia',
+            style: TextStyle(color: DeofootTheme.textMuted)),
+      ),
+    );
+  }
 
   Future<void> _confirm(BuildContext context, bool terima) async {
+    final ikut = jumlahPertemuanIkutBerubah(meetings);
+    final utuh = pertemuanTidakBerubah(meetings).length;
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(terima ? 'Terima seri langganan?' : 'Tolak seri langganan?'),
+        title:
+            Text(terima ? 'Terima seri langganan?' : 'Tolak seri langganan?'),
         content: Text(
-          terima
-              ? 'Seluruh seri ${series.userEmail} (${series.fieldName}, ${series.meetingsTotal} pertemuan) akan DISETUJUI; semua pertemuannya ikut aktif.'
-              : 'Seluruh seri ${series.userEmail} (${series.fieldName}, ${series.meetingsTotal} pertemuan) akan DITOLAK dan semua slotnya kembali bebas.',
+          (terima
+                  ? 'Seluruh seri ${series.userEmail} (${series.fieldName}) akan DISETUJUI. '
+                      '$ikut pertemuan yang masih menunggu akan ikut disetujui.'
+                  : 'Seluruh seri ${series.userEmail} (${series.fieldName}) akan DITOLAK dan slotnya kembali bebas. '
+                      '$ikut pertemuan yang masih menunggu akan ikut ditolak.') +
+              (utuh > 0
+                  ? ' $utuh pertemuan yang sudah berubah status (mis. dibatalkan) tidak ikut berubah.'
+                  : ''),
         ),
         actions: [
           TextButton(
@@ -248,28 +428,7 @@ class _SeriesCard extends StatelessWidget {
         ],
       ),
     );
-    if (ok == true && context.mounted) {
-      final messenger = ScaffoldMessenger.of(context);
-      try {
-        await FirestoreService().setSeriesStatus(
-          series.id,
-          terima ? 'confirmed' : 'rejected',
-        );
-        messenger.showSnackBar(
-          SnackBar(
-              content: Text(terima
-                  ? 'Seri disetujui, semua pertemuan aktif.'
-                  : 'Seri ditolak, semua slot kembali bebas.')),
-        );
-      } catch (e) {
-        debugPrint('VerifyScreen._SeriesCard._confirm gagal: $e');
-        messenger.showSnackBar(
-          const SnackBar(
-              content: Text('Gagal memproses. Coba lagi.'),
-              backgroundColor: DeofootTheme.danger),
-        );
-      }
-    }
+    if (ok == true) onDecision(terima);
   }
 }
 
