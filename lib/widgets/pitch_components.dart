@@ -440,6 +440,72 @@ class _PitchSkeletonCardState extends State<PitchSkeletonCard>
   }
 }
 
+/// Angka yang menghitung ke nilai baru (§3.3 bar bawah & §3.9):
+/// nilai ditampilkan selalu tabular (pemanggil menyediakan style
+/// tabular) dan berubah dengan animasi 250 ms easeOut dari nilai
+/// sebelumnya — bukan dari nol. Reduced motion: seketika.
+class NumberTicker extends StatefulWidget {
+  const NumberTicker({
+    super.key,
+    required this.value,
+    required this.format,
+    required this.style,
+  });
+
+  final int value;
+  final String Function(int) format;
+  final TextStyle style;
+
+  @override
+  State<NumberTicker> createState() => _NumberTickerState();
+}
+
+class _NumberTickerState extends State<NumberTicker>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late int _from;
+  late int _shown;
+
+  @override
+  void initState() {
+    super.initState();
+    _from = widget.value;
+    _shown = widget.value;
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    )..addListener(() {
+        final t = PitchMotion.easeOut.transform(_ctrl.value);
+        setState(() {
+          _shown = (_from + (widget.value - _from) * t).round();
+        });
+      });
+  }
+
+  @override
+  void didUpdateWidget(NumberTicker old) {
+    super.didUpdateWidget(old);
+    if (old.value != widget.value) {
+      _from = _shown;
+      if (PitchMotion.reducedMotion(context)) {
+        _shown = widget.value;
+      } else {
+        _ctrl.forward(from: 0);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      Text(widget.format(_shown), style: widget.style);
+}
+
 /// Bottom sheet Pitch: radius atas 24, permukaan kartu, pegangan
 /// seret tampil. Pemanggil mengatur tinggi/isi (mis. kalender 85%).
 Future<T?> showPitchSheet<T>(

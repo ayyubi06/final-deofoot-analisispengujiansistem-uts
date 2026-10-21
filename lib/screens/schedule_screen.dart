@@ -1,19 +1,30 @@
 import 'package:flutter/material.dart';
-import '../theme.dart';
-import '../models.dart';
+
 import '../booking_logic.dart';
+import '../calendar_logic.dart';
+import '../models.dart';
+import '../motion.dart';
 import '../services/firestore_service.dart';
+import '../theme.dart';
+import '../widgets/calendar_sheet.dart';
+import '../widgets/pitch_components.dart';
+import '../widgets/slot_grid.dart';
 import 'booking_screen.dart';
 import 'recurring_screen.dart';
 
-/// Layar 4 — Jadwal lapangan: date picker 60 hari + grid slot 08.00–22.00.
-/// Tap slot hijau → pilih; tap yang terpilih → batalkan.
-/// Seleksi selalu satu blok berurutan.
+/// Layar 4 — Jadwal lapangan (Fase G §3.3): field tanggal membuka
+/// kalender sheet (G5/G6/G8), grid ubin tiket baru, dan obat kedip:
+/// data lama tetap tampil sampai data tanggal baru siap, lalu
+/// bertukar lewat crossfade+blur singkat (StatusSwapFade); grid
+/// tidak pernah dikosongkan saat berpindah tanggal.
+/// Semantik beku dari v0.4.1: slot 60 menit, grid 08–22, seleksi
+/// satu blok berurutan via toggleSlot, tanggal berganti -> seleksi
+/// kosong, rentang tanggal dari bookingDateRange.
 class ScheduleScreen extends StatefulWidget {
   final Field field;
 
   /// Tanggal awal yang dipilih (mis. dari Pencarian Slot, Fase D).
-  /// Di luar rentang 60 hari → kembali ke hari ini.
+  /// Di luar rentang booking -> kembali ke hari ini.
   final DateTime? initialDate;
   const ScheduleScreen({super.key, required this.field, this.initialDate});
 
@@ -25,7 +36,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   late DateTime _selected;
   SlotSelection _sel = const SlotSelection.empty();
 
-  List<DateTime> get _days => bookingDateRange(DateTime.now());
+  /// Status terakhir yang diketahui (anti-kedip): ditampilkan terus
+  /// selama data tanggal baru belum tiba.
+  Map<int, SlotStatus>? _lastStatuses;
+  String? _lastDateStr;
 
   @override
   void initState() {
@@ -55,6 +69,79 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     setState(() {
       _sel = toggleSlot(_sel, h, selectable);
     });
+  }
+
+  void _openCalendar() {
+    final fs = FirestoreService();
+    final days = bookingDateRange(DateTime.now());
+    showPitchSheet<void>(
+      context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StreamBuilder<List<Booking>>(
+          stream: fs.watchBookingsInRange(
+            fmtDate(days.first),
+            fmtDate(days.last),
+          ),
+          builder: (context, snap) {
+            final now = DateTime.now();
+            final marks = <String, DayMark>{};
+            if (snap.hasData) {
+              for (final d in days) {
+                marks[fmtDate(d)] =
+                    dayMark(snap.data!, widget.field.id, d, now);
+              }
+            }
+            return CalendarSheet(
+              days: days,
+              selected: _selected,
+              today: now,
+              marks: marks,
+              marksLoaded: snap.hasData,
+              onSelect: (d) => setState(() {
+                _selected = d;
+                _sel = const SlotSelection.empty();
+              }),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  static bool _sameStatuses(
+    Map<int, SlotStatus> a,
+    Map<int, SlotStatus> b,
+  ) {
+    if (a.length != b.length) return false;
+    for (final k in a.keys) {
+      if (a[k] != b[k]) return false;
+    }
+    return true;
+  }
+
+  static String _statusHash(Map<int, SlotStatus> s) => s.entries
+      .where((e) => e.value != SlotStatus.free)
+      .map((e) => '${e.key}:${e.value.index}')
+      .join(',');
+
+  Widget _skeletonGrid() {
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        childAspectRatio: 1.8,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+      ),
+      itemCount: closeHour - openHour,
+      itemBuilder: (context, i) => Container(
+        decoration: BoxDecoration(
+          color: DeofootTheme.line,
+          borderRadius: BorderRadius.circular(DeofootTheme.radiusSlot),
+        ),
+      ),
+    );
   }
 
   @override
@@ -101,215 +188,201 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         children: [
           // Aksen warna identitas lapangan.
           Container(height: 4, color: widget.field.color),
-          // Date picker horizontal 60 hari (hari ini → H+59)
-          SizedBox(
-            height: 96,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              itemCount: _days.length,
-              itemBuilder: (context, i) {
-                final d = _days[i];
-                final sel = fmtDate(d) == dateStr;
-                final showMonth = i == 0 || d.month != _days[i - 1].month;
-                return GestureDetector(
-                  onTap: () => setState(() {
-                    _selected = d;
-                    _sel = const SlotSelection.empty();
-                  }),
-                  child: Container(
-                    width: 64,
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    decoration: BoxDecoration(
-                      color: sel ? DeofootTheme.primary : DeofootTheme.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: sel
-                            ? DeofootTheme.primary
-                            : DeofootTheme.booked,
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (showMonth)
-                          Text(
-                            '${monthLabel(d)} ${d.year}',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: sel
-                                  ? Colors.white70
-                                  : DeofootTheme.textMuted,
-                            ),
-                          ),
-                        Text(
-                          dayLabel(d),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: sel
-                                ? Colors.white70
-                                : DeofootTheme.textMuted,
-                          ),
-                        ),
-                        Text(
-                          '${d.day}',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: sel
-                                ? Colors.white
-                                : DeofootTheme.primary,
-                          ),
-                        ),
-                      ],
-                    ),
+          // Field tanggal -> kalender sheet (§3.3).
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: PitchCard(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              onTap: _openCalendar,
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.calendar_month_outlined,
+                    color: DeofootTheme.pitch700,
                   ),
-                );
-              },
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Tanggal main',
+                        style: DeofootTheme.captionStyle,
+                      ),
+                      Text(
+                        indoFullDate(_selected),
+                        style: DeofootTheme.bodyStyle.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  const Icon(
+                    Icons.expand_more,
+                    color: DeofootTheme.ink60,
+                  ),
+                ],
+              ),
             ),
           ),
-          // Legenda
+          // Legenda + keterangan grid (§3.3: "60 mnt" cukup di kepala).
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: const [
-                _Legend(color: DeofootTheme.available, label: 'Bebas'),
+                _Legend(
+                  color: DeofootTheme.card,
+                  border: true,
+                  label: 'Bebas',
+                ),
                 SizedBox(width: 12),
-                _Legend(color: DeofootTheme.booked, label: 'Terisi'),
+                _Legend(color: DeofootTheme.grey, label: 'Terisi'),
                 SizedBox(width: 12),
-                _Legend(color: DeofootTheme.pending, label: 'Menunggu'),
+                _Legend(color: DeofootTheme.amber, label: 'Menunggu'),
                 SizedBox(width: 12),
-                _Legend(color: DeofootTheme.pastSlot, label: 'Lewat'),
+                _Legend(color: DeofootTheme.line, label: 'Lewat'),
               ],
             ),
           ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Text(
-              'Tap slot hijau untuk pilih, tap lagi untuk batal. Seleksi selalu berurutan.',
-              style:
-                  TextStyle(fontSize: 12, color: DeofootTheme.textMuted),
+              'Slot 60 menit · 08.00–22.00 — tap slot bebas untuk pilih, tap lagi untuk batal. Seleksi selalu berurutan.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: DeofootTheme.textMuted),
             ),
           ),
-          // Grid slot
+          // Grid slot anti-kedip.
           Expanded(
             child: StreamBuilder<List<Booking>>(
               stream: fs.watchBookings(widget.field.id, dateStr),
               builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                // Snapshot saat waiting bisa masih membawa data
+                // tanggal lama — jangan dipakai untuk tanggal baru
+                // (itulah sumber kedip v0.4). Data lama yang sudah
+                // dirender dipertahankan sampai data baru tiba.
+                final usable = snap.hasData &&
+                    snap.connectionState != ConnectionState.waiting;
+                if (usable) {
+                  final statuses =
+                      slotStatuses(snap.data!, widget.field.id, dateStr);
+                  if (_lastStatuses == null ||
+                      _lastDateStr != dateStr ||
+                      !_sameStatuses(_lastStatuses!, statuses)) {
+                    _lastStatuses = statuses;
+                    _lastDateStr = dateStr;
+                  }
                 }
-                final statuses = slotStatuses(
-                  snap.data ?? [],
-                  widget.field.id,
-                  dateStr,
-                );
-                final now = DateTime.now();
-                return GridView.builder(
-                  padding: const EdgeInsets.all(16),
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    childAspectRatio: 2.2,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
+                if (_lastStatuses == null) return _skeletonGrid();
+                final show = _lastStatuses!;
+                final waiting =
+                    snap.connectionState == ConnectionState.waiting;
+                return StatusSwapFade(
+                  swapKey: '$_lastDateStr|${_statusHash(show)}',
+                  child: SlotGrid(
+                    statuses: show,
+                    selection: _sel,
+                    isPast: (h) =>
+                        isPastSlot(_selected, h, DateTime.now()),
+                    // Selama data tanggal baru belum tiba, grid
+                    // tampil stabil tapi tidak menerima tap (cegah
+                    // memilih dari data basi).
+                    interactive: !waiting,
+                    onTapHour: (h) => _tapSlot(h, show),
                   ),
-                  itemCount: closeHour - openHour,
-                  itemBuilder: (context, i) {
-                    final h = openHour + i;
-                    final st = statuses[h] ?? SlotStatus.free;
-                    final past =
-                        isPastSlot(_selected, h, now) && st == SlotStatus.free;
-                    final enabled = st == SlotStatus.free && !past;
-                    final sel = _sel.contains(h);
-                    Color bg;
-                    Color fg = Colors.white;
-                    if (sel) {
-                      // Seleksi: navy + teks putih + centang (beda dari status).
-                      bg = DeofootTheme.primary;
-                    } else if (past) {
-                      // Slot lewat: disabled, style sendiri (bukan abu Terisi).
-                      bg = DeofootTheme.pastSlot;
-                      fg = DeofootTheme.textMuted;
-                    } else {
-                      switch (st) {
-                        case SlotStatus.free:
-                          bg = DeofootTheme.available;
-                          break;
-                        case SlotStatus.booked:
-                          bg = DeofootTheme.booked;
-                          fg = DeofootTheme.textMuted;
-                          break;
-                        case SlotStatus.pending:
-                          // Amber HANYA untuk "Menunggu verifikasi".
-                          bg = DeofootTheme.pending;
-                          break;
-                      }
-                    }
-                    return ElevatedButton(
-                      onPressed: enabled
-                          ? () => _tapSlot(h, statuses)
-                          : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: bg,
-                        foregroundColor: fg,
-                        disabledBackgroundColor: bg,
-                        disabledForegroundColor: fg,
-                        minimumSize: Size.zero,
-                        padding: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: sel
-                          ? Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.check, size: 18),
-                                const SizedBox(width: 4),
-                                Text(
-                                  hourLabel(h),
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600),
-                                ),
-                              ],
-                            )
-                          : Text(
-                              hourLabel(h),
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600),
-                            ),
-                    );
-                  },
                 );
               },
             ),
           ),
         ],
       ),
-      bottomNavigationBar: _sel.isEmpty
-          ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: ElevatedButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => BookingScreen(
-                        field: widget.field,
-                        date: _selected,
-                        startHour: _sel.start!,
-                        endHour: _sel.end!,
+      // Bar bawah TINGGI TETAP: grid tidak pernah bergeser kasar
+      // (§3.3) — isi bar bertukar dengan crossfade.
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: DeofootTheme.card,
+          boxShadow: DeofootTheme.cardShadows,
+        ),
+        child: SafeArea(
+          top: false,
+          child: SizedBox(
+            height: 84,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: AnimatedSwitcher(
+                duration: PitchMotion.control,
+                switchInCurve: PitchMotion.easeOut,
+                child: _sel.isEmpty
+                    ? Row(
+                        key: const ValueKey('hint'),
+                        children: [
+                          const Icon(
+                            Icons.touch_app_outlined,
+                            color: DeofootTheme.ink60,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Pilih slot bebas untuk melanjutkan',
+                            style: DeofootTheme.bodyStyle.copyWith(
+                              color: DeofootTheme.ink60,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        key: const ValueKey('ringkasan'),
+                        children: [
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${_sel.hours} jam · ${hourLabel(_sel.start!)}–${hourLabel(_sel.end!)}',
+                                  style: DeofootTheme.captionStyle,
+                                ),
+                                NumberTicker(
+                                  value: bookingTotal(
+                                    _sel.hours,
+                                    widget.field.pricePerHour,
+                                  ),
+                                  format: fmtRupiah,
+                                  style: DeofootTheme.tabular(
+                                    DeofootTheme.titleStyle.copyWith(
+                                      color: DeofootTheme.pitch700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(
+                            width: 140,
+                            child: PitchButton(
+                              label: 'Lanjut',
+                              icon: Icons.arrow_forward,
+                              onPressed: () =>
+                                  Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => BookingScreen(
+                                    field: widget.field,
+                                    date: _selected,
+                                    startHour: _sel.start!,
+                                    endHour: _sel.end!,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ),
-                  child: Text(
-                      'Lanjut — ${_sel.hours} jam (${fmtRupiah(bookingTotal(_sel.hours, widget.field.pricePerHour))})'),
-                ),
               ),
             ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -317,7 +390,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 class _Legend extends StatelessWidget {
   final Color color;
   final String label;
-  const _Legend({required this.color, required this.label});
+  final bool border;
+  const _Legend({required this.color, required this.label, this.border = false});
 
   @override
   Widget build(BuildContext context) {
@@ -329,12 +403,17 @@ class _Legend extends StatelessWidget {
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(3),
+            border: border ? Border.all(color: DeofootTheme.line) : null,
           ),
         ),
         const SizedBox(width: 4),
-        Text(label,
-            style: const TextStyle(
-                fontSize: 12, color: DeofootTheme.textMuted)),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: DeofootTheme.textMuted,
+          ),
+        ),
       ],
     );
   }
