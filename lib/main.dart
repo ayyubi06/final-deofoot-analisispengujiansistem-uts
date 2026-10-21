@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'theme.dart';
+import 'widgets/pitch_components.dart';
 import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
 import 'services/notification_service.dart';
@@ -246,24 +247,24 @@ class _MainNavState extends State<MainNav> with WidgetsBindingObserver {
     ];
     return Scaffold(
       body: IndexedStack(index: _idx, children: pages),
-      bottomNavigationBar: BottomNavigationBar(
+      // Navigasi Pitch (§3.1): indikator pil menggelincir antar tab.
+      bottomNavigationBar: PitchNavBar(
         currentIndex: _idx,
-        selectedItemColor: DeofootTheme.primary,
         onTap: (i) => setState(() => _idx = i),
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
+          PitchNavItem(
+            icon: Icons.home_outlined,
+            activeIcon: Icons.home,
             label: 'Beranda',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.receipt_outlined),
-            activeIcon: Icon(Icons.receipt),
+          PitchNavItem(
+            icon: Icons.receipt_outlined,
+            activeIcon: Icons.receipt,
             label: 'Booking Saya',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outlined),
-            activeIcon: Icon(Icons.person),
+          PitchNavItem(
+            icon: Icons.person_outlined,
+            activeIcon: Icons.person,
             label: 'Profil',
           ),
         ],

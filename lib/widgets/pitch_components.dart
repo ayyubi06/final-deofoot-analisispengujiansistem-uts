@@ -180,6 +180,266 @@ class PitchChip extends StatelessWidget {
   }
 }
 
+/// Satu item pada [PitchNavBar].
+class PitchNavItem {
+  const PitchNavItem({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+}
+
+/// Bottom navigation Pitch (§3.1): indikator pil di belakang ikon
+/// aktif MENGGELINCIR antar tab (transform, 200 ms easeInOut);
+/// ikon aktif pitch700, nonaktif ink60. Mati gesernya bila
+/// reduced motion (durasi 0).
+class PitchNavBar extends StatelessWidget {
+  const PitchNavBar({
+    super.key,
+    required this.currentIndex,
+    required this.onTap,
+    required this.items,
+  });
+
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+  final List<PitchNavItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduced = PitchMotion.reducedMotion(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: DeofootTheme.card,
+        boxShadow: DeofootTheme.cardShadows,
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 64,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final itemWidth = constraints.maxWidth / items.length;
+              const pillWidth = 56.0;
+              final pillX =
+                  currentIndex * itemWidth + (itemWidth - pillWidth) / 2;
+              return Stack(
+                children: [
+                  // Pil penanda yang menggelincir (transform murni).
+                  AnimatedContainer(
+                    duration:
+                        reduced ? Duration.zero : PitchMotion.control,
+                    curve: PitchMotion.easeInOut,
+                    transform: Matrix4.translationValues(pillX, 6, 0),
+                    width: pillWidth,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: DeofootTheme.pitch700.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      for (var i = 0; i < items.length; i++)
+                        Expanded(
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => onTap(i),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  i == currentIndex
+                                      ? items[i].activeIcon
+                                      : items[i].icon,
+                                  size: 24,
+                                  color: i == currentIndex
+                                      ? DeofootTheme.pitch700
+                                      : DeofootTheme.ink60,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  items[i].label,
+                                  style: DeofootTheme.captionStyle.copyWith(
+                                    color: i == currentIndex
+                                        ? DeofootTheme.pitch700
+                                        : DeofootTheme.ink60,
+                                    fontWeight: i == currentIndex
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Pembungkus masuk berjenjang (§3.2/§4): elemen masuk dari
+/// scale 0,95 + fade, jeda ±35 ms per indeks (plafon 6 item),
+/// HANYA pada pemuatan pertama — id yang sudah pernah tampil
+/// tidak beranimasi lagi selama sesi aplikasi berjalan.
+/// Reduced motion: tampil langsung tanpa animasi.
+class PitchEntrance extends StatefulWidget {
+  const PitchEntrance({
+    super.key,
+    required this.id,
+    required this.index,
+    required this.child,
+  });
+
+  final String id;
+  final int index;
+  final Widget child;
+
+  /// Id yang sudah selesai beranimasi pada sesi ini.
+  static final Set<String> _seen = <String>{};
+
+  /// Untuk test: kosongkan catatan sesi.
+  static void debugResetSeen() => _seen.clear();
+
+  @override
+  State<PitchEntrance> createState() => _PitchEntranceState();
+}
+
+class _PitchEntranceState extends State<PitchEntrance>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  bool _animate = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _animate = !PitchEntrance._seen.contains(widget.id);
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+    if (_animate) {
+      PitchEntrance._seen.add(widget.id);
+      final steps = widget.index > 6 ? 6 : widget.index;
+      Future.delayed(Duration(milliseconds: 35 * steps), () {
+        if (mounted) _ctrl.forward();
+      });
+    } else {
+      _ctrl.value = 1;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_animate || PitchMotion.reducedMotion(context)) return widget.child;
+    final curved = CurvedAnimation(parent: _ctrl, curve: PitchMotion.easeOut);
+    return FadeTransition(
+      opacity: curved,
+      child: ScaleTransition(
+        scale: Tween<double>(begin: PitchMotion.enterScale, end: 1)
+            .animate(curved),
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// Kartu kerangka (skeleton) berbentuk kartu lapangan (§3.2):
+/// dipakai saat memuat — bukan spinner di tengah layar kosong.
+/// Sapuan shimmer bergerak lewat opacity; mati saat reduced motion.
+class PitchSkeletonCard extends StatefulWidget {
+  const PitchSkeletonCard({super.key});
+
+  @override
+  State<PitchSkeletonCard> createState() => _PitchSkeletonCardState();
+}
+
+class _PitchSkeletonCardState extends State<PitchSkeletonCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Widget _block(double width, double height) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: DeofootTheme.line,
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reduced = PitchMotion.reducedMotion(context);
+    final card = PitchCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(height: 150, color: DeofootTheme.line),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _block(160, 18),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    _block(110, 22),
+                    const Spacer(),
+                    _block(80, 16),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    if (reduced) return card;
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.55, end: 1).animate(
+        CurvedAnimation(parent: _ctrl, curve: PitchMotion.easeInOut),
+      ),
+      child: card,
+    );
+  }
+}
+
 /// Bottom sheet Pitch: radius atas 24, permukaan kartu, pegangan
 /// seret tampil. Pemanggil mengatur tinggi/isi (mis. kalender 85%).
 Future<T?> showPitchSheet<T>(

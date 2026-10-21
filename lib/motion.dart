@@ -52,3 +52,35 @@ class PitchMotion {
   static bool reducedMotion(BuildContext context) =>
       MediaQuery.of(context).disableAnimations;
 }
+
+/// Transisi layar direction-aware (§3.1): maju = geser dari kanan,
+/// kembali = sebaliknya (animasi yang sama diputar mundur oleh
+/// Navigator). Hanya transform & opacity; mati bila reduced motion.
+class PitchPageTransitionsBuilder extends PageTransitionsBuilder {
+  const PitchPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    if (PitchMotion.reducedMotion(context)) return child;
+    final position = Tween<Offset>(
+      begin: const Offset(1, 0),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(parent: animation, curve: PitchMotion.easeInOut),
+    );
+    final opacity = CurvedAnimation(
+      parent: animation,
+      curve: PitchMotion.easeOut,
+    );
+    return SlideTransition(
+      position: position,
+      child: FadeTransition(opacity: opacity, child: child),
+    );
+  }
+}

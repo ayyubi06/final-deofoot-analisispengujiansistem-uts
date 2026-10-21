@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'motion.dart';
+
 /// Tema Deofoot — Fase G "Pitch" (SPEK-DESAIN-FASE-G §1).
 ///
 /// Token spek tersedia dengan nama persisnya (pitch900, pitch700,
@@ -102,6 +104,12 @@ class DeofootTheme {
       useMaterial3: true,
       colorScheme: scheme,
       scaffoldBackgroundColor: surfacePitch,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: PitchPageTransitionsBuilder(),
+          TargetPlatform.iOS: PitchPageTransitionsBuilder(),
+        },
+      ),
       textTheme: jakarta.copyWith(
         headlineMedium: displayStyle,
         titleLarge: titleStyle,
