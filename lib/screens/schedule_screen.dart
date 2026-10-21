@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../availability_logic.dart';
 import '../booking_logic.dart';
 import '../calendar_logic.dart';
 import '../models.dart';
@@ -26,7 +27,21 @@ class ScheduleScreen extends StatefulWidget {
   /// Tanggal awal yang dipilih (mis. dari Pencarian Slot, Fase D).
   /// Di luar rentang booking -> kembali ke hari ini.
   final DateTime? initialDate;
-  const ScheduleScreen({super.key, required this.field, this.initialDate});
+
+  /// Pra-seleksi dari Cari Slot (Fase G §3.4): jam mulai + durasi
+  /// hasil pencarian. Diterapkan SATU KALI saat status pertama
+  /// tiba, hanya bila seluruh rentangnya masih bebas & belum
+  /// lewat (canPreselect) — selain itu seleksi mulai kosong
+  /// seperti biasa.
+  final int? initialStartHour;
+  final int? initialDuration;
+  const ScheduleScreen({
+    super.key,
+    required this.field,
+    this.initialDate,
+    this.initialStartHour,
+    this.initialDuration,
+  });
 
   @override
   State<ScheduleScreen> createState() => _ScheduleScreenState();
@@ -40,6 +55,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   /// selama data tanggal baru belum tiba.
   Map<int, SlotStatus>? _lastStatuses;
   String? _lastDateStr;
+
+  /// Pra-seleksi Cari Slot hanya dicoba satu kali.
+  bool _preselectDone = false;
 
   @override
   void initState() {
@@ -273,6 +291,23 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       !_sameStatuses(_lastStatuses!, statuses)) {
                     _lastStatuses = statuses;
                     _lastDateStr = dateStr;
+                  }
+                  // Pra-seleksi dari Cari Slot (§3.4): satu kali,
+                  // hanya bila rentangnya masih sahih bebas.
+                  if (!_preselectDone) {
+                    _preselectDone = true;
+                    final s = widget.initialStartHour;
+                    final d = widget.initialDuration;
+                    if (s != null &&
+                        d != null &&
+                        canPreselect(
+                          statuses,
+                          s,
+                          d,
+                          (h) => isPastSlot(_selected, h, DateTime.now()),
+                        )) {
+                      _sel = SlotSelection(s, s + d);
+                    }
                   }
                 }
                 if (_lastStatuses == null) return _skeletonGrid();

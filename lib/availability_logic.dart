@@ -35,3 +35,24 @@ List<Field> lapanganBebas({
   hasil.sort((a, b) => a.name.compareTo(b.name));
   return hasil;
 }
+
+/// Apakah rentang [startHour, startHour+hours) boleh dipra-seleksi
+/// di grid Jadwal (Fase G §3.4: hasil Cari Slot membuka Jadwal
+/// dengan slot terkait sudah terpilih)? Syaratnya persis aturan
+/// selectable grid: semua jam bebas, belum lewat, dan rentang di
+/// dalam grid global. Murni — bisa di-test.
+bool canPreselect(
+  Map<int, SlotStatus> statuses,
+  int startHour,
+  int hours,
+  bool Function(int hour) isPast,
+) {
+  if (hours < 1 || startHour < openHour || startHour + hours > closeHour) {
+    return false;
+  }
+  for (var h = startHour; h < startHour + hours; h++) {
+    if ((statuses[h] ?? SlotStatus.free) != SlotStatus.free) return false;
+    if (isPast(h)) return false;
+  }
+  return true;
+}

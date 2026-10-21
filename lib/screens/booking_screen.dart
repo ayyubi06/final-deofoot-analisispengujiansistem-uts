@@ -1,17 +1,25 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import '../theme.dart';
-import '../models.dart';
+
 import '../booking_logic.dart';
+import '../calendar_logic.dart';
+import '../models.dart';
+import '../motion.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
+import '../theme.dart';
+import '../widgets/pitch_components.dart';
 
-/// Layar 5 — Booking 4 langkah: ringkasan → WA → bayar → bukti transfer.
-/// Mendukung slot berurutan multi-jam dalam 1 transaksi.
+/// Layar 5 — Booking 4 langkah: ringkasan → WA → bayar → bukti
+/// transfer. Mendukung slot berurutan multi-jam dalam 1 transaksi.
+/// (Fase G §3.5: kartu Pitch, pratinjau bukti radius 20, status
+/// kirim berupa indikator garis, dan keadaan sukses beranimasi
+/// pop pegas. Alur & redaksi tidak berubah dari v0.4.1.)
 class BookingScreen extends StatefulWidget {
   final Field field;
   final DateTime date;
@@ -75,8 +83,8 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   void _pickSheet() {
-    showModalBottomSheet(
-      context: context,
+    showPitchSheet(
+      context,
       builder: (_) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -129,13 +137,9 @@ class _BookingScreenState extends State<BookingScreen> {
       await NotificationService().mintaIzin();
       NotificationService().rekonsiliasiUntukUser(u.uid);
       if (!mounted) return;
-      // Kembali ke Beranda + snackbar sukses.
-      Navigator.of(context).popUntil((r) => r.isFirst);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Booking terkirim, menunggu verifikasi.'),
-          backgroundColor: DeofootTheme.available,
-        ),
+      // Keadaan sukses (§3.5): layar sukses menggantikan formulir.
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const BookingSuccessScreen()),
       );
     } on BookingConflictException catch (e) {
       if (mounted) {
@@ -163,7 +167,6 @@ class _BookingScreenState extends State<BookingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dateStr = fmtDate(widget.date);
     final danaNumber = _payConfig?['danaNumber'] ?? '...';
     final danaName = _payConfig?['danaName'] ?? '...';
     final method = _payMethods[_payMethod];
@@ -178,46 +181,41 @@ class _BookingScreenState extends State<BookingScreen> {
             children: [
               // Langkah 1 — Ringkasan
               _stepTitle('1', 'Ringkasan booking'),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      _row('Lapangan', widget.field.name),
-                      _row('Tanggal', dateStr),
-                      _row('Jam',
-                          '${hourLabel(widget.startHour)} – ${hourLabel(widget.endHour)}'),
-                      _row('Durasi', '${_hours * 60} menit'),
-                      const Divider(),
-                      _row('Total', fmtRupiah(_total), bold: true),
-                    ],
-                  ),
+              PitchCard(
+                child: Column(
+                  children: [
+                    _row('Lapangan', widget.field.name),
+                    _row('Tanggal', indoFullDate(widget.date)),
+                    _row('Jam',
+                        '${hourLabel(widget.startHour)} – ${hourLabel(widget.endHour)}'),
+                    _row('Durasi', '${_hours * 60} menit'),
+                    const Divider(),
+                    _row('Total', fmtRupiah(_total), total: true),
+                  ],
                 ),
               ),
               const SizedBox(height: 16),
               // Langkah 2 — Nomor WhatsApp (wajib)
               _stepTitle('2', 'Nomor WhatsApp'),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: TextFormField(
-                    controller: _waCtrl,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(
-                      labelText: 'Nomor WhatsApp aktif',
-                      hintText: '08xxxxxxxxxx',
-                      prefixIcon: Icon(Icons.chat_outlined),
-                    ),
-                    validator: (v) => isValidWhatsapp(v ?? '')
-                        ? null
-                        : 'Nomor WA wajib diisi, format 08… (10–14 digit).',
+              PitchCard(
+                child: TextFormField(
+                  controller: _waCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Nomor WhatsApp aktif',
+                    hintText: '08xxxxxxxxxx',
+                    prefixIcon: Icon(Icons.chat_outlined),
                   ),
+                  validator: (v) => isValidWhatsapp(v ?? '')
+                      ? null
+                      : 'Nomor WA wajib diisi, format 08… (10–14 digit).',
                 ),
               ),
               const SizedBox(height: 16),
               // Langkah 3 — Pembayaran (3 metode, tanpa QRIS)
               _stepTitle('3', 'Pembayaran'),
-              Card(
+              PitchCard(
+                padding: const EdgeInsets.symmetric(vertical: 8),
                 child: RadioGroup<int>(
                   groupValue: _payMethod,
                   onChanged: (v) => setState(() => _payMethod = v!),
@@ -235,102 +233,115 @@ class _BookingScreenState extends State<BookingScreen> {
                   ),
                 ),
               ),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Tujuan (${method.$1}):',
-                          style: const TextStyle(
-                              color: DeofootTheme.textMuted)),
-                      const SizedBox(height: 4),
-                      Text('Nomor DANA: $danaNumber',
-                          style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: DeofootTheme.primary)),
-                      Text('a.n. $danaName',
-                          style: const TextStyle(
-                              color: DeofootTheme.textMuted)),
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          Clipboard.setData(
-                              ClipboardData(text: danaNumber));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content:
-                                    Text('Nomor DANA disalin.')),
-                          );
-                        },
-                        icon: const Icon(Icons.copy_outlined),
-                        label: const Text('Salin nomor'),
+              const SizedBox(height: 12),
+              PitchCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Tujuan (${method.$1}):',
+                        style: const TextStyle(
+                            color: DeofootTheme.textMuted)),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Nomor DANA: $danaNumber',
+                      style: DeofootTheme.tabular(
+                        DeofootTheme.titleStyle,
                       ),
-                    ],
-                  ),
+                    ),
+                    Text('a.n. $danaName',
+                        style: const TextStyle(
+                            color: DeofootTheme.textMuted)),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Clipboard.setData(
+                            ClipboardData(text: danaNumber));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Nomor DANA disalin.')),
+                        );
+                      },
+                      icon: const Icon(Icons.copy_outlined),
+                      label: const Text('Salin nomor'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: DeofootTheme.pitch700,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                              DeofootTheme.radiusButton),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 16),
               // Langkah 4 — Bukti transfer
               _stepTitle('4', 'Bukti transfer'),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      if (_proof != null)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.file(
-                            File(_proof!.path),
-                            height: 200,
-                            fit: BoxFit.cover,
-                          ),
-                        )
-                      else
-                        Container(
-                          height: 140,
-                          decoration: BoxDecoration(
-                            color: DeofootTheme.background,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                                color: DeofootTheme.booked),
-                          ),
-                          child: const Center(
-                            child: Text(
-                              'Belum ada bukti transfer',
-                              style: TextStyle(
-                                  color: DeofootTheme.textMuted),
-                            ),
+              PitchCard(
+                child: Column(
+                  children: [
+                    if (_proof != null)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(
+                            DeofootTheme.radiusCard),
+                        child: Image.file(
+                          File(_proof!.path),
+                          height: 200,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    else
+                      Container(
+                        height: 140,
+                        decoration: BoxDecoration(
+                          color: DeofootTheme.surfacePitch,
+                          borderRadius: BorderRadius.circular(
+                              DeofootTheme.radiusCard),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'Belum ada bukti transfer',
+                            style: TextStyle(
+                                color: DeofootTheme.textMuted),
                           ),
                         ),
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: _pickSheet,
-                        icon:
-                            const Icon(Icons.upload_outlined),
-                        label: Text(_proof == null
-                            ? 'Pilih bukti transfer'
-                            : 'Ganti bukti transfer'),
                       ),
-                    ],
-                  ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _pickSheet,
+                      icon: const Icon(Icons.upload_outlined),
+                      label: Text(_proof == null
+                          ? 'Pilih bukti transfer'
+                          : 'Ganti bukti transfer'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: DeofootTheme.pitch700,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                              DeofootTheme.radiusButton),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 24),
-              ElevatedButton(
-                // Tombol AKTIF hanya jika bukti sudah dipilih.
+              // Status kirim = indikator garis (§3.5), bukan spinner.
+              if (_sending) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: const LinearProgressIndicator(
+                    minHeight: 4,
+                    color: DeofootTheme.pitch700,
+                    backgroundColor: DeofootTheme.line,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              PitchButton(
+                label: _sending ? 'Mengirim…' : 'Kirim Booking',
                 onPressed:
                     (_proof == null || _sending) ? null : _send,
-                child: _sending
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text('Kirim Booking'),
               ),
               if (_proof == null)
                 const Padding(
@@ -356,35 +367,134 @@ class _BookingScreenState extends State<BookingScreen> {
           children: [
             CircleAvatar(
               radius: 14,
-              backgroundColor: DeofootTheme.primary,
+              backgroundColor: DeofootTheme.pitch700,
               child: Text(n,
                   style: const TextStyle(
                       color: Colors.white, fontSize: 12)),
             ),
             const SizedBox(width: 8),
-            Text(t,
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: DeofootTheme.primary)),
+            Text(
+              t,
+              style: DeofootTheme.bodyStyle.copyWith(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: DeofootTheme.pitch900,
+              ),
+            ),
           ],
         ),
       );
 
-  Widget _row(String k, String v, {bool bold = false}) => Padding(
+  Widget _row(String k, String v, {bool total = false}) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(k,
-                style:
-                    const TextStyle(color: DeofootTheme.textMuted)),
-            Text(v,
-                style: TextStyle(
-                    fontWeight:
-                        bold ? FontWeight.bold : FontWeight.w600,
-                    color: DeofootTheme.primary)),
+            Text(k, style: const TextStyle(color: DeofootTheme.textMuted)),
+            Text(
+              v,
+              style: total
+                  ? DeofootTheme.tabular(
+                      DeofootTheme.bodyStyle.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: DeofootTheme.pitch700,
+                      ),
+                    )
+                  : const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: DeofootTheme.pitch900,
+                    ),
+            ),
           ],
         ),
       );
+}
+
+/// Keadaan sukses booking (§3.5): tanda centang POP IN dengan
+/// pegas (bounce 0,25 — momen langka, satu-satunya perayaan yang
+/// diizinkan spek) + kalimat pengingat jujur yang sama seperti
+/// sebelumnya. Reduced motion: tampil tanpa pegas.
+class BookingSuccessScreen extends StatefulWidget {
+  const BookingSuccessScreen({super.key});
+
+  @override
+  State<BookingSuccessScreen> createState() => _BookingSuccessScreenState();
+}
+
+class _BookingSuccessScreenState extends State<BookingSuccessScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pop;
+
+  @override
+  void initState() {
+    super.initState();
+    _pop = AnimationController.unbounded(vsync: this, value: 0.95);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (PitchMotion.reducedMotion(context)) {
+        _pop.value = 1;
+      } else {
+        _pop.animateWith(
+          SpringSimulation(PitchMotion.spring(bounce: 0.25), 0.95, 1, 0),
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _pop.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: AnimatedBuilder(
+                  animation: _pop,
+                  builder: (context, child) => Transform.scale(
+                    scale: _pop.value,
+                    child: child,
+                  ),
+                  child: Container(
+                    width: 88,
+                    height: 88,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: DeofootTheme.pitch700,
+                    ),
+                    child: const Icon(
+                      Icons.check,
+                      size: 44,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Booking terkirim, menunggu verifikasi.',
+                textAlign: TextAlign.center,
+                style: DeofootTheme.titleStyle,
+              ),
+              const SizedBox(height: 32),
+              PitchButton(
+                label: 'Kembali ke Beranda',
+                onPressed: () =>
+                    Navigator.of(context).popUntil((r) => r.isFirst),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
