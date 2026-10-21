@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
+
 import '../main.dart';
-import '../theme.dart';
+import '../motion.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../theme.dart';
+import '../widgets/pitch_components.dart';
 
 /// Layar 2 — Login/Register via Firebase Auth.
-/// Animasi masuk staggered (logo/tagline → form → tombol), animasi bawaan
-/// Flutter saja. Transisi login sukses tetap eksplisit (tidak diubah).
+/// (Fase G §3.9: wordmark Display pitch900 + aksen volt, tombol
+/// primer PitchButton, animasi masuk SATU crossfade 250 ms —
+/// stagger 900 ms lama dicabut. Transisi login sukses tetap
+/// eksplisit seperti sebelumnya.)
 class AuthScreen extends StatefulWidget {
   final bool initialIsLogin;
   const AuthScreen({super.key, this.initialIsLogin = true});
@@ -27,9 +32,6 @@ class _AuthScreenState extends State<AuthScreen>
   bool _obscure = true;
 
   late final AnimationController _ctl;
-  late final Animation<double> _headAnim; // logo + tagline
-  late final Animation<double> _formAnim; // form
-  late final Animation<double> _btnAnim; // tombol
 
   @override
   void initState() {
@@ -37,24 +39,16 @@ class _AuthScreenState extends State<AuthScreen>
     _isLogin = widget.initialIsLogin;
     _ctl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: PitchMotion.screen,
     );
-    _headAnim = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(
-          parent: _ctl,
-          curve: const Interval(0.0, 0.35, curve: Curves.easeOut)),
-    );
-    _formAnim = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(
-          parent: _ctl,
-          curve: const Interval(0.25, 0.65, curve: Curves.easeOut)),
-    );
-    _btnAnim = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(
-          parent: _ctl,
-          curve: const Interval(0.55, 1.0, curve: Curves.easeOut)),
-    );
-    _ctl.forward();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (PitchMotion.reducedMotion(context)) {
+        _ctl.value = 1;
+      } else {
+        _ctl.forward();
+      }
+    });
   }
 
   @override
@@ -63,18 +57,6 @@ class _AuthScreenState extends State<AuthScreen>
     _emailCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
-  }
-
-  /// Bungkus widget dengan fade + slide up mengikuti [anim].
-  Widget _staggered(Animation<double> anim, Widget child) {
-    final slide = Tween<Offset>(
-      begin: const Offset(0, 0.25),
-      end: Offset.zero,
-    ).animate(anim);
-    return FadeTransition(
-      opacity: anim,
-      child: SlideTransition(position: slide, child: child),
-    );
   }
 
   Future<void> _submit() async {
@@ -139,14 +121,17 @@ class _AuthScreenState extends State<AuthScreen>
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 16),
-              _staggered(
-                _headAnim,
+        child: FadeTransition(
+          opacity: CurvedAnimation(
+            parent: _ctl,
+            curve: PitchMotion.easeOut,
+          ),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 16),
                 Column(
                   children: [
                     Image.asset(
@@ -155,6 +140,27 @@ class _AuthScreenState extends State<AuthScreen>
                       height: 84,
                     ),
                     const SizedBox(height: 12),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'Deofoot',
+                            style: DeofootTheme.displayStyle.copyWith(
+                              fontSize: 24,
+                              color: DeofootTheme.pitch900,
+                            ),
+                          ),
+                          TextSpan(
+                            text: '.',
+                            style: DeofootTheme.displayStyle.copyWith(
+                              fontSize: 24,
+                              color: DeofootTheme.volt,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
                     const Text(
                       'Booking futsal semudah itu.',
                       style: TextStyle(
@@ -164,98 +170,94 @@ class _AuthScreenState extends State<AuthScreen>
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 24),
-              _staggered(
-                _formAnim,
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TextFormField(
-                      controller: _emailCtrl,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        prefixIcon: Icon(Icons.email_outlined),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) {
-                          return 'Email wajib diisi.';
-                        }
-                        if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$')
-                            .hasMatch(v.trim())) {
-                          return 'Format email tidak valid.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _passCtrl,
-                      obscureText: _obscure,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock_outlined),
-                        suffixIcon: IconButton(
-                          icon: Icon(_obscure
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined),
-                          onPressed: () =>
-                              setState(() => _obscure = !_obscure),
-                        ),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) {
-                          return 'Password wajib diisi.';
-                        }
-                        if (v.length < 6) {
-                          return 'Password minimal 6 karakter.';
-                        }
-                        return null;
-                      },
-                    ),
-                  ],
+                const SizedBox(height: 24),
+                TextFormField(
+                  controller: _emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    prefixIcon: Icon(Icons.email_outlined),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Email wajib diisi.';
+                    }
+                    if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$')
+                        .hasMatch(v.trim())) {
+                      return 'Format email tidak valid.';
+                    }
+                    return null;
+                  },
                 ),
-              ),
-              const SizedBox(height: 24),
-              _staggered(
-                _btnAnim,
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    ElevatedButton(
-                      onPressed: _loading ? null : _submit,
-                      child: _loading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white),
-                            )
-                          : Text(_isLogin ? 'Masuk' : 'Daftar'),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _passCtrl,
+                  obscureText: _obscure,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    prefixIcon: const Icon(Icons.lock_outlined),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscure
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined),
+                      onPressed: () =>
+                          setState(() => _obscure = !_obscure),
                     ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: _loading
-                          ? null
-                          : () => setState(() => _isLogin = !_isLogin),
-                      child: Text(_isLogin
-                          ? 'Belum punya akun? Daftar'
-                          : 'Sudah punya akun? Masuk'),
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: _loading ? null : _signInGoogle,
-                      icon: const Icon(Icons.g_mobiledata, size: 28),
-                      label: const Text('Masuk dengan Google'),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 48),
-                      ),
-                    ),
-                  ],
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) {
+                      return 'Password wajib diisi.';
+                    }
+                    if (v.length < 6) {
+                      return 'Password minimal 6 karakter.';
+                    }
+                    return null;
+                  },
                 ),
-              ),
-            ],
+                const SizedBox(height: 24),
+                if (_loading) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: const LinearProgressIndicator(
+                      minHeight: 4,
+                      color: DeofootTheme.pitch700,
+                      backgroundColor: DeofootTheme.line,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                PitchButton(
+                  label: _loading
+                      ? 'Memproses…'
+                      : (_isLogin ? 'Masuk' : 'Daftar'),
+                  onPressed: _loading ? null : _submit,
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _loading
+                      ? null
+                      : () => setState(() => _isLogin = !_isLogin),
+                  child: Text(_isLogin
+                      ? 'Belum punya akun? Daftar'
+                      : 'Sudah punya akun? Masuk'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _signInGoogle,
+                  icon: const Icon(Icons.g_mobiledata, size: 28),
+                  label: const Text('Masuk dengan Google'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: DeofootTheme.pitch700,
+                    side: const BorderSide(color: DeofootTheme.line),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                          DeofootTheme.radiusButton),
+                    ),
+                    minimumSize: const Size(double.infinity, 52),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
