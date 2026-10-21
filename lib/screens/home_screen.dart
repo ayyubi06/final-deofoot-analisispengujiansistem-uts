@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../models.dart';
 import '../booking_logic.dart';
+import '../field_logic.dart';
 import '../services/firestore_service.dart';
 import 'schedule_screen.dart';
 import 'slot_search_screen.dart';
@@ -150,13 +151,20 @@ class _FieldCard extends StatelessWidget {
                   height: 140,
                   width: double.infinity,
                   fit: BoxFit.cover,
+                  // Placeholder spek C2 (rework T17): warna identitas
+                  // lapangan + inisial namanya (bukan ikon).
                   errorBuilder: (_, _, _) => Container(
                     height: 140,
-                    color: DeofootTheme.primary.withValues(alpha: 0.08),
-                    child: const Icon(
-                      Icons.sports_soccer,
-                      size: 48,
-                      color: DeofootTheme.primary,
+                    color: field.color,
+                    child: Center(
+                      child: Text(
+                        inisialNama(field.name),
+                        style: const TextStyle(
+                          fontSize: 44,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -237,9 +245,7 @@ class _FieldCard extends StatelessWidget {
                     stream: fs.watchBookings(field.id, date),
                     builder: (context, snap) {
                       final bookings = snap.data ?? [];
-                      final statuses = slotStatuses(bookings, field.id, date,
-                          openHour: field.openHour,
-                          closeHour: field.closeHour);
+                      final statuses = slotStatuses(bookings, field.id, date);
                       final free = statuses.values
                           .where((s) => s == SlotStatus.free)
                           .length;

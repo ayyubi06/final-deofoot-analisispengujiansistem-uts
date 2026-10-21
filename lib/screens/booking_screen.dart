@@ -124,7 +124,9 @@ class _BookingScreenState extends State<BookingScreen> {
         totalPrice: _total,
         pricePerHour: widget.field.pricePerHour,
       );
-      // Jadwalkan pengingat bayar untuk booking baru (Fase A).
+      // Izin notifikasi diminta pada momen ini — sesudah booking
+      // pertama dibuat (spek A4, rework T2) — lalu jadwalkan pengingat.
+      await NotificationService().mintaIzin();
       NotificationService().rekonsiliasiUntukUser(u.uid);
       if (!mounted) return;
       // Kembali ke Beranda + snackbar sukses.

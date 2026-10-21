@@ -90,6 +90,56 @@ void main() {
       expect(lap.pendapatan, 0);
       expect(lap.perLapangan, isEmpty);
     });
+
+    test('jumlah per status (B3): semua status dalam periode terhitung',
+        () {
+      final lap = hitungLaporan(
+        [
+          _b(id: 'a'),
+          _b(id: 'b', status: 'pending'),
+          _b(id: 'c', status: 'pending'),
+          _b(id: 'd', status: 'cancelled'),
+          _b(id: 'e', status: 'rejected'),
+          _b(id: 'f', status: 'expired'),
+          _b(id: 'g', status: 'pending', date: '2026-10-22'), // luar rentang
+        ],
+        DateTime(2026, 10, 21),
+        DateTime(2026, 10, 21),
+      );
+      expect(lap.jumlahPerStatus['confirmed'], 1);
+      expect(lap.jumlahPerStatus['pending'], 2);
+      expect(lap.jumlahPerStatus['cancelled'], 1);
+      expect(lap.jumlahPerStatus['rejected'], 1);
+      expect(lap.jumlahPerStatus['expired'], 1);
+    });
+
+    test('okupansi per lapangan (B3): slot ÷ (14 × hari) persen', () {
+      // 7 slot terisi dalam periode 1 hari → 7/14 = 50%.
+      final lap = hitungLaporan(
+        [
+          _b(
+              id: 'a',
+              startTime: '08:00',
+              endTime: '15:00',
+              totalPrice: 840000),
+        ],
+        DateTime(2026, 10, 21),
+        DateTime(2026, 10, 21),
+      );
+      expect(lap.jumlahHari, 1);
+      expect(lap.perLapangan.single.slotTerisi, 7);
+      expect(lap.perLapangan.single.okupansiPersen, closeTo(50.0, 0.001));
+
+      // 2 slot dalam periode 7 hari → 2/98 ≈ 2,04%.
+      final lap7 = hitungLaporan(
+        [_b(id: 'a', startTime: '19:00', endTime: '21:00')],
+        DateTime(2026, 10, 19),
+        DateTime(2026, 10, 25),
+      );
+      expect(lap7.jumlahHari, 7);
+      expect(
+          lap7.perLapangan.single.okupansiPersen, closeTo(2.0408, 0.001));
+    });
   });
 
   group('rentangPreset', () {
@@ -102,10 +152,18 @@ void main() {
       expect(a, DateTime(2026, 10, 21));
     });
 
-    test('minggu ini = Senin 19 s/d Minggu 25 Okt 2026', () {
-      final (m, a) = rentangPreset(JenisRentang.mingguIni, now);
-      expect(m, DateTime(2026, 10, 19));
-      expect(a, DateTime(2026, 10, 25));
+    test('7 hari terakhir = bergulir hari ini + 6 hari sebelumnya (B2)',
+        () {
+      final (m, a) = rentangPreset(JenisRentang.tujuhHariTerakhir, now);
+      expect(m, DateTime(2026, 10, 15));
+      expect(a, DateTime(2026, 10, 21));
+    });
+
+    test('7 hari terakhir melintasi pergantian bulan', () {
+      final (m, a) = rentangPreset(
+          JenisRentang.tujuhHariTerakhir, DateTime(2026, 11, 2, 9, 0));
+      expect(m, DateTime(2026, 10, 27));
+      expect(a, DateTime(2026, 11, 2));
     });
 
     test('bulan ini = 1 s/d 31 Okt 2026', () {

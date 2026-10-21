@@ -73,13 +73,24 @@ String labelStatusSeri(String status) {
   }
 }
 
-/// Pertemuan seri yang termasuk "sisa seri" untuk pembatalan massal:
-/// masih pending/confirmed dan waktu mulainya masih di depan
-/// (yang sudah dimainkan tidak diubah).
+/// Pertemuan seri yang termasuk "sisa seri" untuk pembatalan massal
+/// (SPEK-V04 E7): hanya pertemuan mendatang yang masih **Disetujui
+/// (confirmed)** — yang pending TIDAK ikut dibatalkan (rework T12).
 List<Booking> sisaPertemuan(List<Booking> bookingsSeri, DateTime now) {
   return bookingsSeri
-      .where((b) =>
-          (b.status == 'pending' || b.status == 'confirmed') &&
-          b.startDateTime.isAfter(now))
+      .where((b) => b.status == 'confirmed' && b.startDateTime.isAfter(now))
       .toList();
+}
+
+/// Tanggal pertemuan pertama seri (SPEK-V04 E2): kemunculan pertama
+/// [weekday] (1=Senin .. 7=Minggu) MULAI BESOK dari [hariIni].
+/// Bila besok tepat hari terpilih → besok; bila hari ini yang terpilih
+/// → pekan depan (+7 dari hari ini lewat pencarian maju).
+DateTime tanggalPertamaUntukHari(int weekday, DateTime hariIni) {
+  var d = DateTime(hariIni.year, hariIni.month, hariIni.day)
+      .add(const Duration(days: 1));
+  while (d.weekday != weekday) {
+    d = d.add(const Duration(days: 1));
+  }
+  return d;
 }

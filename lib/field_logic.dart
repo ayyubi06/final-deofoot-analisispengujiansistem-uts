@@ -30,20 +30,29 @@ int parseHarga(String teks) =>
     int.tryParse(teks.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
 
 /// Validasi form lapangan. Mengembalikan pesan kesalahan, atau null
-/// bila valid. Aturan (SPEK-V04 Fase C): nama tidak kosong, harga > 0,
-/// jam buka < jam tutup dalam rentang 0–24.
+/// bila valid. Aturan (SPEK-V04 Fase C): nama tidak kosong, harga > 0.
 String? validasiField({
   required String nama,
   required String hargaTeks,
-  required int openHour,
-  required int closeHour,
 }) {
   if (nama.trim().isEmpty) return 'Nama lapangan wajib diisi.';
   if (parseHarga(hargaTeks) <= 0) {
     return 'Harga per jam harus angka lebih dari 0.';
   }
-  if (openHour < 0 || closeHour > 24 || openHour >= closeHour) {
-    return 'Jam operasional tidak valid (jam buka harus sebelum jam tutup).';
-  }
   return null;
+}
+
+/// Inisial nama lapangan untuk placeholder foto (SPEK-V04 C2: warna
+/// identitas + inisial): huruf pertama kata pertama + huruf pertama
+/// kata kedua (bila ada), kapital. "Futsal L1" → "FL"; "Padel" → "P".
+String inisialNama(String nama) {
+  final kata = nama
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((k) => k.isNotEmpty)
+      .toList();
+  if (kata.isEmpty) return '?';
+  final pertama = kata[0][0].toUpperCase();
+  if (kata.length == 1) return pertama;
+  return '$pertama${kata[1][0].toUpperCase()}';
 }

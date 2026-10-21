@@ -321,14 +321,14 @@ class FirestoreService {
         'cancelledMeetingDates': <String>[],
         'createdAt': FieldValue.serverTimestamp(),
       });
-      for (final t in meetingDates) {
+      for (var i = 0; i < meetingDates.length; i++) {
         final bref = colBookings.doc();
         tx.set(bref, {
           'userId': userId,
           'userEmail': userEmail,
           'fieldId': fieldId,
           'fieldName': fieldName,
-          'date': t,
+          'date': meetingDates[i],
           'startTime': startTime,
           'endTime': endTime,
           'status': 'pending',
@@ -337,6 +337,7 @@ class FirestoreService {
           'totalPrice': totalPerMeeting,
           'pricePerHour': pricePerHour,
           'seriesId': sref.id,
+          'seriesIndex': i + 1, // nomor urut pertemuan 1..n (E5)
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
@@ -344,23 +345,24 @@ class FirestoreService {
     });
   }
 
-  /// Admin: setujui (→confirmed) / tolak (→rejected) SELURUH seri.
-  /// Booking pertemuan yang masih pending mengikuti status seri;
-  /// yang sudah dibatalkan per pertemuan tidak diubah.
+  /// Admin: setujui (→confirmed) / tolak (→rejected) SELURUH seri
+  /// secara ATOMIK (rework T19, spek E6): dokumen seri + semua booking
+  /// pertemuannya yang masih pending ditulis dalam SATU batch —
+  /// tidak ada keadaan setengah jadi bila gagal di tengah.
+  /// Yang sudah dibatalkan per pertemuan tidak diubah.
   Future<void> setSeriesStatus(String seriesId, String status) async {
     if (status != 'confirmed' && status != 'rejected') {
       throw ArgumentError('Status seri tidak valid: $status');
     }
-    await _db
-        .collection('subscriptions')
-        .doc(seriesId)
-        .update({'status': status});
     final snap = await _db
         .collection('bookings')
         .where('seriesId', isEqualTo: seriesId)
         .where('status', isEqualTo: 'pending')
         .get();
     final batch = _db.batch();
+    batch.update(_db.collection('subscriptions').doc(seriesId), {
+      'status': status,
+    });
     for (final d in snap.docs) {
       batch.update(d.reference, {'status': status});
     }
@@ -385,8 +387,8 @@ class FirestoreService {
     await batch.commit();
   }
 
-  /// Batalkan SISA seri: semua pertemuan pending/confirmed yang belum
-  /// dimainkan → cancelled; status seri → cancelled.
+  /// Batalkan SISA seri (spek E7): hanya pertemuan mendatang yang
+  /// masih Disetujui (confirmed) → cancelled; status seri → cancelled.
   /// Mengembalikan jumlah pertemuan yang dibatalkan.
   Future<int> cancelRemainingSeries(String seriesId) async {
     final snap = await _db

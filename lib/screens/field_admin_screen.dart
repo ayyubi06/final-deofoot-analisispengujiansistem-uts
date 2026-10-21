@@ -6,9 +6,9 @@ import '../field_logic.dart';
 import '../services/firestore_service.dart';
 
 /// Layar Kelola Lapangan (admin, Fase C v0.4): daftar semua lapangan
-/// (termasuk nonaktif), tambah, ubah (nama, kategori, harga, warna,
-/// jam operasional), dan aktif/nonaktifkan. Lapangan TIDAK dihapus
-/// permanen dari aplikasi — nonaktifkan adalah penggantinya.
+/// (termasuk nonaktif), tambah, ubah (nama, kategori, harga, warna),
+/// dan aktif/nonaktifkan. Lapangan TIDAK dihapus permanen dari
+/// aplikasi — nonaktifkan adalah penggantinya.
 class FieldAdminScreen extends StatelessWidget {
   const FieldAdminScreen({super.key});
 
@@ -67,13 +67,16 @@ class _FieldAdminCard extends StatelessWidget {
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: f.color,
-          child: const Icon(Icons.sports_soccer, color: Colors.white),
+          child: Text(
+            inisialNama(f.name),
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold),
+          ),
         ),
         title: Text(f.name,
             style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: Text(
-          '${f.category} • ${fmtRupiah(f.pricePerHour)}/jam • '
-          '${hourLabel(f.openHour)}–${hourLabel(f.closeHour)}'
+          '${f.category} • ${fmtRupiah(f.pricePerHour)}/jam'
           '${f.isActive ? '' : ' • NONAKTIF'}',
         ),
         trailing: Switch(
@@ -140,8 +143,6 @@ class _FieldFormScreenState extends State<FieldFormScreen> {
   late final TextEditingController _hargaCtrl;
   late String _kategoriSel;
   late int _warnaArgb;
-  late int _openHour;
-  late int _closeHour;
   late bool _aktif;
   bool _saving = false;
 
@@ -154,8 +155,6 @@ class _FieldFormScreenState extends State<FieldFormScreen> {
         TextEditingController(text: e == null ? '' : '${e.pricePerHour}');
     _kategoriSel = e?.category ?? 'Futsal';
     _warnaArgb = e?.color.toARGB32() ?? 0xFF102A43;
-    _openHour = e?.openHour ?? 8;
-    _closeHour = e?.closeHour ?? 22;
     _aktif = e?.isActive ?? true;
   }
 
@@ -170,8 +169,6 @@ class _FieldFormScreenState extends State<FieldFormScreen> {
     final err = validasiField(
       nama: _namaCtrl.text,
       hargaTeks: _hargaCtrl.text,
-      openHour: _openHour,
-      closeHour: _closeHour,
     );
     if (err != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -188,8 +185,6 @@ class _FieldFormScreenState extends State<FieldFormScreen> {
       category: _kategoriSel,
       color: Color(_warnaArgb),
       isActive: _aktif,
-      openHour: _openHour,
-      closeHour: _closeHour,
     );
     try {
       if (e == null) {
@@ -274,48 +269,6 @@ class _FieldFormScreenState extends State<FieldFormScreen> {
                   ),
               ],
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _label('Jam buka'),
-                      DropdownButton<int>(
-                        value: _openHour,
-                        isExpanded: true,
-                        items: [
-                          for (var h = 0; h < 24; h++)
-                            DropdownMenuItem(
-                                value: h, child: Text(hourLabel(h))),
-                        ],
-                        onChanged: (v) => setState(() => _openHour = v!),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _label('Jam tutup'),
-                      DropdownButton<int>(
-                        value: _closeHour,
-                        isExpanded: true,
-                        items: [
-                          for (var h = 1; h <= 24; h++)
-                            DropdownMenuItem(
-                                value: h, child: Text(hourLabel(h))),
-                        ],
-                        onChanged: (v) => setState(() => _closeHour = v!),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
             const SizedBox(height: 8),
             SwitchListTile(
               title: const Text('Lapangan aktif'),
@@ -327,8 +280,9 @@ class _FieldFormScreenState extends State<FieldFormScreen> {
             const SizedBox(height: 8),
             const Text(
               'Catatan foto: foto lapangan mengikuti id-nya '
-              '(assets/images/fields/<id>.jpg). Lapangan baru tampil '
-              'dengan ikon sampai aset fotonya ditambahkan ke aplikasi.',
+              '(assets/images/fields/<id>.jpg). Lapangan baru tanpa '
+              'aset foto tampil dengan placeholder warna identitas + '
+              'inisial nama (spek C2).',
               style: TextStyle(fontSize: 12, color: DeofootTheme.textMuted),
             ),
             const SizedBox(height: 24),

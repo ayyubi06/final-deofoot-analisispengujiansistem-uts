@@ -7,8 +7,9 @@ import '../services/firestore_service.dart';
 import '../services/report_pdf_service.dart';
 
 /// Layar Laporan (admin, Fase B v0.4): agregat booking Disetujui per
-/// rentang tanggal (hari ini / minggu ini / bulan ini / pilihan),
-/// rincian per lapangan & per tanggal, dan export PDF.
+/// rentang tanggal (hari ini / 7 hari terakhir / bulan ini / pilihan),
+/// jumlah per status, okupansi per lapangan, rincian per tanggal,
+/// dan export PDF.
 class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key});
 
@@ -101,7 +102,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 spacing: 8,
                 children: [
                   _chip(JenisRentang.hariIni, 'Hari ini'),
-                  _chip(JenisRentang.mingguIni, 'Minggu ini'),
+                  _chip(JenisRentang.tujuhHariTerakhir, '7 hari terakhir'),
                   _chip(JenisRentang.bulanIni, 'Bulan ini'),
                   _chip(JenisRentang.pilihan, 'Pilih tanggal'),
                 ],
@@ -148,8 +149,37 @@ class _ReportScreenState extends State<ReportScreen> {
                   ],
                 ),
                 const Text(
-                  'Hanya booking Disetujui yang dihitung.',
+                  'Pendapatan hanya dari booking Disetujui.',
                   style: TextStyle(fontSize: 12, color: DeofootTheme.textMuted),
+                ),
+                const SizedBox(height: 12),
+                // Jumlah booking per status (spek B3).
+                const Text('Jumlah per Status',
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: DeofootTheme.primary)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final s in const [
+                      'confirmed',
+                      'pending',
+                      'rejected',
+                      'cancelled',
+                      'expired',
+                    ])
+                      Chip(
+                        avatar: CircleAvatar(
+                          backgroundColor: DeofootTheme.statusColor(s),
+                          radius: 6,
+                        ),
+                        label: Text(
+                            '${DeofootTheme.statusLabel(s)}: ${lap.jumlahPerStatus[s] ?? 0}'),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 const Text('Per Lapangan',
@@ -167,7 +197,9 @@ class _ReportScreenState extends State<ReportScreen> {
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
                         title: Text(a.fieldName),
-                        subtitle: Text('${a.jumlahBooking} booking'),
+                        subtitle: Text(
+                            '${a.jumlahBooking} booking • Okupansi '
+                            '${a.okupansiPersen.toStringAsFixed(1)}%'),
                         trailing: Text(
                           fmtRupiah(a.pendapatan),
                           style: const TextStyle(fontWeight: FontWeight.w600),

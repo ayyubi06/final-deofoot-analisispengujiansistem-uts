@@ -15,11 +15,6 @@ class Field {
   /// dianggap aktif.
   final bool isActive;
 
-  /// Fase C: jam operasional dari `scheduleGrid` dokumen
-  /// ({openHour, closeHour}). Dokumen lama tanpa scheduleGrid → 08–22.
-  final int openHour;
-  final int closeHour;
-
   Field({
     required this.id,
     required this.name,
@@ -27,8 +22,6 @@ class Field {
     this.category = 'Futsal',
     this.color = DeofootTheme.primary,
     this.isActive = true,
-    this.openHour = 8,
-    this.closeHour = 22,
   });
 
   factory Field.fromDoc(DocumentSnapshot doc) {
@@ -37,8 +30,10 @@ class Field {
   }
 
   /// Konstruktor dari map mentah (dipakai juga untuk unit test).
+  /// Jam operasional TIDAK dibaca dari dokumen — grid global 08.00–22.00
+  /// untuk semua lapangan (rework T5: scheduleGrid per lapangan dicabut,
+  /// keputusan tuan muda 2026-10-21; kandidat v0.5 tersendiri).
   factory Field.fromMap(String id, Map<String, dynamic> d) {
-    final grid = d['scheduleGrid'] as Map<String, dynamic>?;
     return Field(
       id: id,
       name: d['name'] as String? ?? id,
@@ -46,8 +41,6 @@ class Field {
       category: d['category'] as String? ?? 'Futsal',
       color: _parseColor(d['color']),
       isActive: d['isActive'] as bool? ?? true,
-      openHour: (grid?['openHour'] as num?)?.toInt() ?? 8,
-      closeHour: (grid?['closeHour'] as num?)?.toInt() ?? 22,
     );
   }
 
@@ -59,7 +52,6 @@ class Field {
       'category': category,
       'color': color.toARGB32(),
       'isActive': isActive,
-      'scheduleGrid': {'openHour': openHour, 'closeHour': closeHour},
     };
   }
 
@@ -104,6 +96,11 @@ class Booking {
   /// Id seri langganan (Fase E) bila booking ini pertemuan dari sebuah
   /// seri; null untuk booking biasa.
   final String? seriesId;
+
+  /// Nomor urut pertemuan dalam seri, 1..n (SPEK-V04 E5); null untuk
+  /// booking biasa. Dipakai juga notifikasi seri (E9: pengingat bayar
+  /// hanya untuk seriesIndex 1).
+  final int? seriesIndex;
   final String whatsapp;
   final DateTime createdAt;
 
@@ -121,6 +118,7 @@ class Booking {
     required this.totalPrice,
     this.pricePerHour = 0,
     this.seriesId,
+    this.seriesIndex,
     this.whatsapp = '',
     required this.createdAt,
   });
@@ -141,6 +139,7 @@ class Booking {
       totalPrice: (d['totalPrice'] as num?)?.toInt() ?? 0,
       pricePerHour: (d['pricePerHour'] as num?)?.toInt() ?? 0,
       seriesId: d['seriesId'] as String?,
+      seriesIndex: (d['seriesIndex'] as num?)?.toInt(),
       whatsapp: d['whatsapp'] as String? ?? '',
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );

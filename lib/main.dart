@@ -47,8 +47,10 @@ class _FirebaseInitGateState extends State<FirebaseInitGate> {
     setState(() => _ready = true);
     // Expire booking pending yang basi (>30 menit) - fire and forget.
     FirestoreService().expireStalePendings().then((_) {}, onError: (_) {});
-    // Notifikasi lokal (Fase A): init plugin + minta izin - fire and forget.
-    NotificationService().mintaIzin().then((_) {}, onError: (_) {});
+    // Notifikasi lokal (Fase A): init plugin saja. Izin TIDAK diminta di
+    // sini — spek A4 (rework T2): izin diminta sesudah booking pertama
+    // dibuat (lihat BookingScreen/RecurringScreen).
+    NotificationService().init().then((_) {}, onError: (_) {});
   }
 
   void _retry() {

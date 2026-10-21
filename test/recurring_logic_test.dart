@@ -143,16 +143,44 @@ void main() {
     });
   });
 
-  group('sisaPertemuan (batalkan sisa seri)', () {
-    test('hanya pending/confirmed yang belum dimainkan', () {
+  group('sisaPertemuan (batalkan sisa seri, spek E7)', () {
+    test('hanya confirmed mendatang — pending TIDAK ikut (rework T12)', () {
       final now = DateTime(2026, 10, 22, 10, 0);
       final sisa = sisaPertemuan([
         _b('2026-10-21', '14:00', '15:00'), // sudah lewat
         _b('2026-10-28', '14:00', '15:00'), // depan, confirmed → sisa
-        _b('2026-11-04', '14:00', '15:00', status: 'pending'), // depan → sisa
+        _b('2026-11-04', '14:00', '15:00', status: 'pending'), // BUKAN sisa
         _b('2026-11-11', '14:00', '15:00', status: 'cancelled'), // sudah batal
       ], now);
-      expect(sisa.map((b) => b.date), ['2026-10-28', '2026-11-04']);
+      expect(sisa.map((b) => b.date), ['2026-10-28']);
+    });
+  });
+
+  group('tanggalPertamaUntukHari (form seri E2)', () {
+    // Rabu, 21 Oktober 2026.
+    final rabu = DateTime(2026, 10, 21);
+
+    test('besok tepat hari terpilih → besok', () {
+      // Kamis = weekday 4.
+      expect(tanggalPertamaUntukHari(4, rabu), DateTime(2026, 10, 22));
+    });
+
+    test('hari terpilih = hari ini → kemunculan berikutnya (+7)', () {
+      // Rabu = weekday 3; mulai besok → Rabu pekan depan.
+      expect(tanggalPertamaUntukHari(3, rabu), DateTime(2026, 10, 28));
+    });
+
+    test('hari terpilih sudah lewat pekan ini → pekan depan', () {
+      // Selasa = weekday 2 (kemarin) → Selasa 27 Okt.
+      expect(tanggalPertamaUntukHari(2, rabu), DateTime(2026, 10, 27));
+    });
+
+    test('hasil selalu hari yang dipilih & sesudah hari ini', () {
+      for (var wd = 1; wd <= 7; wd++) {
+        final t = tanggalPertamaUntukHari(wd, rabu);
+        expect(t.weekday, wd);
+        expect(t.isAfter(rabu), isTrue);
+      }
     });
   });
 

@@ -35,17 +35,20 @@ bool hasConflict(
 /// Status slot untuk grid jadwal.
 enum SlotStatus { free, booked, pending }
 
+/// Grid jam global SEMUA lapangan: 08.00–22.00 (14 slot per hari).
+/// (Rework T5: jam operasional per lapangan/scheduleGrid DICABUT atas
+/// keputusan tuan muda 2026-10-21 — grid kembali global seperti v0.3;
+/// jam per lapangan diparkir sebagai kandidat v0.5 tersendiri.)
+const int openHour = 8;
+const int closeHour = 22;
+
 /// Tentukan status tiap slot 60 menit dari daftar booking.
 /// pending & confirmed → terisi; cancelled/rejected/expired → bebas.
-/// Rentang jam mengikuti grid lapangan (Fase C); bawaan 08–22 seperti
-/// perilaku lama untuk dokumen tanpa scheduleGrid.
 Map<int, SlotStatus> slotStatuses(
   List<Booking> bookings,
   String fieldId,
-  String date, {
-  int openHour = 8,
-  int closeHour = 22,
-}) {
+  String date,
+) {
   final map = <int, SlotStatus>{};
   for (var h = openHour; h < closeHour; h++) {
     map[h] = SlotStatus.free;

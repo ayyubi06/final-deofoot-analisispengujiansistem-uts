@@ -9,6 +9,8 @@ Booking _booking({
   String startTime = '14:00',
   String endTime = '15:00',
   DateTime? createdAt,
+  String? seriesId,
+  int? seriesIndex,
 }) {
   return Booking(
     id: id,
@@ -21,6 +23,8 @@ Booking _booking({
     endTime: endTime,
     status: status,
     totalPrice: 120000,
+    seriesId: seriesId,
+    seriesIndex: seriesIndex,
     createdAt: createdAt ?? DateTime(2026, 10, 21, 10, 0),
   );
 }
@@ -30,20 +34,25 @@ final _now = DateTime(2026, 10, 21, 10, 5);
 
 void main() {
   group('rencanaNotifikasi — pengingat bayar', () {
-    test('pending baru → 1 rencana bayar pada createdAt+15 mnt', () {
+    test('pending baru → 1 rencana bayar pada createdAt+20 mnt (spek A1)', () {
       final r = rencanaNotifikasi(
         bookings: [_booking(createdAt: DateTime(2026, 10, 21, 10, 0))],
         now: _now,
       );
       expect(r.length, 1);
       expect(r.single.jenis, JenisPengingat.bayar);
-      expect(r.single.waktu, DateTime(2026, 10, 21, 10, 15));
+      expect(r.single.waktu, DateTime(2026, 10, 21, 10, 20));
       expect(r.single.segera, isFalse);
-      expect(r.single.judul, 'Selesaikan pembayaran booking');
-      expect(r.single.isi, 'Lapangan 1 • 2026-10-25 • 14:00–15:00');
+      // Teks templat spek A1 persis; {jam} = kedaluwarsa (10:00+30 mnt).
+      expect(
+        r.single.judul,
+        'Booking Lapangan 1 menunggu pembayaran — selesaikan sebelum '
+        '10:30 agar slot tidak lepas.',
+      );
+      expect(r.single.isi, '');
     });
 
-    test('pending lewat batas 15 mnt → tidak ada pengingat susulan', () {
+    test('pending lewat batas 20 mnt → tidak ada pengingat susulan', () {
       final r = rencanaNotifikasi(
         bookings: [_booking(createdAt: DateTime(2026, 10, 21, 9, 0))],
         now: _now,
@@ -68,19 +77,21 @@ void main() {
   });
 
   group('rencanaNotifikasi — pengingat main', () {
-    test('confirmed jauh → terjadwal mulai−2 jam', () {
+    test('confirmed jauh → terjadwal mulai−1 jam (spek A2)', () {
       final r = rencanaNotifikasi(
         bookings: [_booking(status: 'confirmed')],
         now: _now,
       );
       expect(r.length, 1);
       expect(r.single.jenis, JenisPengingat.main);
-      expect(r.single.waktu, DateTime(2026, 10, 25, 12, 0));
+      expect(r.single.waktu, DateTime(2026, 10, 25, 13, 0));
       expect(r.single.segera, isFalse);
-      expect(r.single.judul, 'Pengingat main');
+      // Teks templat spek A2 persis.
+      expect(r.single.judul, 'Siap-siap! Booking Lapangan 1 mulai 14:00.');
+      expect(r.single.isi, '');
     });
 
-    test('confirmed, titik −2 jam sudah lewat tapi main belum → segera', () {
+    test('confirmed, titik −1 jam sudah lewat tapi main belum → segera', () {
       final r = rencanaNotifikasi(
         bookings: [
           _booking(
@@ -90,7 +101,7 @@ void main() {
             endTime: '12:00',
           ),
         ],
-        now: _now, // 10:05; titik pengingat 09:00 sudah lewat
+        now: _now, // 10:05; titik pengingat 10:00 sudah lewat
       );
       expect(r.length, 1);
       expect(r.single.segera, isTrue);
@@ -116,6 +127,53 @@ void main() {
         final r = rencanaNotifikasi(bookings: [_booking(status: s)], now: _now);
         expect(r, isEmpty, reason: 'status $s');
       }
+    });
+  });
+
+  group('rencanaNotifikasi — seri (spek E9)', () {
+    test('pengingat bayar hanya untuk pertemuan pertama seri', () {
+      final r = rencanaNotifikasi(
+        bookings: [
+          _booking(id: 's1', seriesId: 'seri1', seriesIndex: 1),
+          _booking(id: 's2', seriesId: 'seri1', seriesIndex: 2),
+          _booking(id: 's3', seriesId: 'seri1', seriesIndex: 3),
+        ],
+        now: _now,
+      );
+      expect(r.length, 1);
+      expect(r.single.bookingId, 's1');
+      expect(r.single.jenis, JenisPengingat.bayar);
+    });
+
+    test('pengingat main seri hanya untuk pertemuan ≤ 14 hari ke depan', () {
+      final dalam = rencanaNotifikasi(
+        bookings: [
+          _booking(
+            id: 'm13',
+            status: 'confirmed',
+            date: '2026-11-03', // 13 hari dari 21 Okt
+            seriesId: 'seri1',
+            seriesIndex: 2,
+          ),
+        ],
+        now: _now,
+      );
+      expect(dalam.length, 1);
+      expect(dalam.single.jenis, JenisPengingat.main);
+
+      final luar = rencanaNotifikasi(
+        bookings: [
+          _booking(
+            id: 'm15',
+            status: 'confirmed',
+            date: '2026-11-05', // 15 hari dari 21 Okt
+            seriesId: 'seri1',
+            seriesIndex: 3,
+          ),
+        ],
+        now: _now,
+      );
+      expect(luar, isEmpty);
     });
   });
 

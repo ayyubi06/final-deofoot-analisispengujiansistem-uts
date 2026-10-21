@@ -39,7 +39,9 @@ class _RecurringScreenState extends State<RecurringScreen> {
   final _picker = ImagePicker();
   final _waCtrl = TextEditingController();
 
-  late DateTime _startDate;
+  /// Hari terpilih (1=Senin .. 7=Minggu) — spek E2 (rework T13):
+  /// user memilih HARI; tanggal pertemuan pertama diturunkan.
+  late int _weekday;
   late int _startHour;
   late int _durasi;
   int _meetings = 4;
@@ -47,6 +49,8 @@ class _RecurringScreenState extends State<RecurringScreen> {
   bool _sending = false;
   Map<String, String>? _payConfig;
 
+  /// Pertemuan pertama = kemunculan pertama hari terpilih mulai besok.
+  DateTime get _startDate => tanggalPertamaUntukHari(_weekday, DateTime.now());
   List<String> get _dates => ekspansiTanggalSeri(_startDate, _meetings);
   int get _total => totalHargaSeri(
         jumlahPertemuan: _meetings,
@@ -57,16 +61,13 @@ class _RecurringScreenState extends State<RecurringScreen> {
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    var d = widget.initialDate ?? today;
-    d = DateTime(d.year, d.month, d.day);
-    if (d.isBefore(today)) d = today;
-    _startDate = d;
-    _startHour = widget.initialStartHour ?? widget.field.openHour;
-    if (_startHour < widget.field.openHour ||
-        _startHour >= widget.field.closeHour) {
-      _startHour = widget.field.openHour;
+    // Hari awal: dari tanggal konteks Jadwal bila ada; selain itu
+    // hari besok (agar pertemuan pertama = besok, sesuai bawaan E2).
+    _weekday = widget.initialDate?.weekday ??
+        DateTime.now().add(const Duration(days: 1)).weekday;
+    _startHour = widget.initialStartHour ?? openHour;
+    if (_startHour < openHour || _startHour >= closeHour) {
+      _startHour = openHour;
     }
     _durasi = widget.initialDuration ?? 1;
     _clampDurasi();
@@ -82,21 +83,9 @@ class _RecurringScreenState extends State<RecurringScreen> {
   }
 
   void _clampDurasi() {
-    final maxDur = widget.field.closeHour - _startHour;
+    final maxDur = closeHour - _startHour;
     if (_durasi > maxDur) _durasi = maxDur;
     if (_durasi < 1) _durasi = 1;
-  }
-
-  Future<void> _pickDate() async {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _startDate,
-      firstDate: today,
-      lastDate: today.add(const Duration(days: 59)),
-    );
-    if (picked != null) setState(() => _startDate = picked);
   }
 
   Future<void> _pick(ImageSource src) async {
@@ -158,7 +147,9 @@ class _RecurringScreenState extends State<RecurringScreen> {
         proofBase64: b64,
         pricePerHour: widget.field.pricePerHour,
       );
-      // Pengingat untuk pertemuan-pertemuan seri (lewat rekonsiliasi A).
+      // Izin notifikasi diminta sesudah booking (pertama) dibuat —
+      // spek A4 (rework T2); lalu rekonsiliasi pengingat seri (A/E9).
+      await NotificationService().mintaIzin();
       NotificationService().rekonsiliasiUntukUser(u.uid);
       if (!mounted) return;
       Navigator.of(context).popUntil((r) => r.isFirst);
@@ -227,20 +218,27 @@ class _RecurringScreenState extends State<RecurringScreen> {
                     children: [
                       _row('Lapangan', f.name),
                       const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      const Text('Hari',
+                          style: TextStyle(color: DeofootTheme.textMuted)),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
                         children: [
-                          const Text('Mulai',
-                              style: TextStyle(color: DeofootTheme.textMuted)),
-                          OutlinedButton.icon(
-                            onPressed: _pickDate,
-                            icon: const Icon(Icons.calendar_today_outlined,
-                                size: 18),
-                            label: Text(
-                                '${namaHari(_startDate)}, ${fmtDate(_startDate)}'),
-                          ),
+                          for (var wd = 1; wd <= 7; wd++)
+                            ChoiceChip(
+                              // 1 Jan 2024 = Senin (acuan nama hari).
+                              label: Text(namaHari(DateTime(2024, 1, wd))),
+                              selected: _weekday == wd,
+                              onSelected: (_) =>
+                                  setState(() => _weekday = wd),
+                              visualDensity: VisualDensity.compact,
+                            ),
                         ],
                       ),
+                      const SizedBox(height: 8),
+                      _row('Pertemuan pertama',
+                          tanggalIndonesia(_startDate)),
                       const SizedBox(height: 8),
                       Row(
                         children: [
@@ -250,7 +248,7 @@ class _RecurringScreenState extends State<RecurringScreen> {
                           DropdownButton<int>(
                             value: _startHour,
                             items: [
-                              for (var h = f.openHour; h < f.closeHour; h++)
+                              for (var h = openHour; h < closeHour; h++)
                                 DropdownMenuItem(
                                     value: h, child: Text(hourLabel(h))),
                             ],
@@ -267,7 +265,7 @@ class _RecurringScreenState extends State<RecurringScreen> {
                             value: _durasi,
                             items: [
                               for (var d = 1;
-                                  d <= f.closeHour - _startHour && d <= 4;
+                                  d <= closeHour - _startHour && d <= 4;
                                   d++)
                                 DropdownMenuItem(
                                     value: d, child: Text('$d jam')),

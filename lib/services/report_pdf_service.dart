@@ -23,7 +23,7 @@ class ReportPdfService {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(36),
         build: (ctx) => [
-          pw.Text('Deofoot — Laporan Pendapatan',
+          pw.Text('Laporan Deofoot',
               style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 4),
           pw.Text('Periode: $labelPeriode'),
@@ -41,6 +41,22 @@ class ReportPdfService {
               ]
             ],
           ),
+          pw.SizedBox(height: 10),
+          pw.Text('Jumlah booking per status',
+              style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 4),
+          pw.TableHelper.fromTextArray(
+            headers: const ['Disetujui', 'Menunggu', 'Ditolak', 'Dibatalkan', 'Kedaluwarsa'],
+            data: [
+              [
+                '${lap.jumlahPerStatus['confirmed'] ?? 0}',
+                '${lap.jumlahPerStatus['pending'] ?? 0}',
+                '${lap.jumlahPerStatus['rejected'] ?? 0}',
+                '${lap.jumlahPerStatus['cancelled'] ?? 0}',
+                '${lap.jumlahPerStatus['expired'] ?? 0}',
+              ]
+            ],
+          ),
           pw.SizedBox(height: 16),
           pw.Text('Per Lapangan', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
@@ -48,10 +64,15 @@ class ReportPdfService {
             pw.Text('Tidak ada booking Disetujui pada periode ini.')
           else
             pw.TableHelper.fromTextArray(
-              headers: const ['Lapangan', 'Booking', 'Pendapatan'],
+              headers: const ['Lapangan', 'Booking', 'Okupansi', 'Pendapatan'],
               data: [
                 for (final a in lap.perLapangan)
-                  [a.fieldName, '${a.jumlahBooking}', fmtRupiah(a.pendapatan)]
+                  [
+                    a.fieldName,
+                    '${a.jumlahBooking}',
+                    '${a.okupansiPersen.toStringAsFixed(1)}%',
+                    fmtRupiah(a.pendapatan),
+                  ]
               ],
             ),
           pw.SizedBox(height: 16),

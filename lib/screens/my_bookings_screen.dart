@@ -23,22 +23,53 @@ class MyBookingsScreen extends StatelessWidget {
             tabs: [Tab(text: 'Akan datang'), Tab(text: 'Riwayat')],
           ),
         ),
-        body: StreamBuilder<List<Booking>>(
-          stream: fs.watchMyBookings(uid),
-          builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            final all = snap.data ?? [];
-            final upcoming = all.where((b) => b.isUpcoming).toList();
-            final history = all.where((b) => !b.isUpcoming).toList();
-            return TabBarView(
-              children: [
-                _list(context, upcoming, showCancel: true),
-                _list(context, history, showCancel: false),
-              ],
-            );
-          },
+        body: Column(
+          children: [
+            // Catatan kejujuran cakupan notifikasi (spek A5, rework T15).
+            Container(
+              width: double.infinity,
+              color: DeofootTheme.primary.withValues(alpha: 0.06),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.notifications_outlined,
+                      size: 16, color: DeofootTheme.textMuted),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Pengingat di aplikasi ini hanya pengingat jadwal '
+                      '(batas bayar & mulai main) yang tersimpan di HP '
+                      'kamu. Perubahan status verifikasi dari admin '
+                      'tidak memunculkan notifikasi — itu membutuhkan '
+                      'notifikasi push server (FCM).',
+                      style: TextStyle(
+                          fontSize: 12, color: DeofootTheme.textMuted),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: StreamBuilder<List<Booking>>(
+                stream: fs.watchMyBookings(uid),
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final all = snap.data ?? [];
+                  final upcoming = all.where((b) => b.isUpcoming).toList();
+                  final history = all.where((b) => !b.isUpcoming).toList();
+                  return TabBarView(
+                    children: [
+                      _list(context, upcoming, showCancel: true),
+                      _list(context, history, showCancel: false),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -178,8 +209,10 @@ class _BookingCard extends StatelessWidget {
                         fontSize: 12, color: DeofootTheme.textMuted),
                   ),
                 ),
-              if (b.seriesId != null &&
-                  (b.status == 'pending' || b.status == 'confirmed')) ...[
+              // Sisa seri hanya untuk pertemuan yang sudah Disetujui
+              // (spek E7, rework T12) — seri pending dibatalkan per
+              // pertemuan lewat tombol Batalkan biasa.
+              if (b.seriesId != null && b.status == 'confirmed') ...[
                 const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,

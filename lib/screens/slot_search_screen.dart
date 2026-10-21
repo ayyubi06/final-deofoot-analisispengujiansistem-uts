@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../models.dart';
 import '../booking_logic.dart';
+import '../field_logic.dart';
 import '../availability_logic.dart';
 import '../services/firestore_service.dart';
 import 'schedule_screen.dart';
 
-/// Layar Cari Slot Kosong (Fase D v0.4): pilih tanggal, durasi, jendela
-/// jam (dan kategori) → daftar slot kosong lintas lapangan, terurut jam
-/// mulai. Ketuk hasil → masuk Jadwal lapangan pada tanggal itu.
+/// Layar Cari Slot Kosong (Fase D v0.4, rework T8): user memilih satu
+/// tanggal, satu jam mulai, durasi 1–4 jam, dan kategori (opsional) →
+/// hasil = daftar LAPANGAN yang seluruh slot pada rentang itu bebas
+/// (spek D2/D3/D6). Ketuk hasil → Jadwal lapangan itu pada tanggal
+/// terpilih (D4).
 class SlotSearchScreen extends StatefulWidget {
   const SlotSearchScreen({super.key});
 
@@ -20,12 +23,19 @@ const _kategori = ['Semua', 'Futsal', 'Padel', 'Tenis', 'Mini Soccer'];
 
 class _SlotSearchScreenState extends State<SlotSearchScreen> {
   DateTime _selected = DateTime.now();
+  int _jamMulai = 19;
   int _durasi = 1;
-  int _jamMulai = 8;
-  int _jamSelesai = 22;
   String _kat = 'Semua';
 
   List<DateTime> get _days => bookingDateRange(DateTime.now());
+
+  void _setJamMulai(int h) {
+    setState(() {
+      _jamMulai = h;
+      // Durasi tidak boleh menembus tutup grid global (22.00).
+      if (_jamMulai + _durasi > closeHour) _durasi = closeHour - _jamMulai;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +100,7 @@ class _SlotSearchScreenState extends State<SlotSearchScreen> {
               },
             ),
           ),
-          // Filter: kategori
+          // Filter: kategori (opsional, bawaan Semua — D2)
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -113,20 +123,33 @@ class _SlotSearchScreenState extends State<SlotSearchScreen> {
               ],
             ),
           ),
-          // Filter: durasi + jendela jam
+          // Filter: satu jam mulai + durasi 1–4 jam (D2)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Row(
               children: [
+                const Text('Jam mulai:'),
+                const SizedBox(width: 8),
+                DropdownButton<int>(
+                  value: _jamMulai,
+                  items: [
+                    for (var h = openHour; h < closeHour; h++)
+                      DropdownMenuItem(value: h, child: Text(hourLabel(h))),
+                  ],
+                  onChanged: (v) => _setJamMulai(v!),
+                ),
+                const SizedBox(width: 16),
                 const Text('Durasi:'),
                 const SizedBox(width: 8),
-                for (final d in [1, 2, 3])
+                for (final d in [1, 2, 3, 4])
                   Padding(
                     padding: const EdgeInsets.only(right: 6),
                     child: ChoiceChip(
                       label: Text('$d jam'),
                       selected: _durasi == d,
-                      onSelected: (_) => setState(() => _durasi = d),
+                      onSelected: _jamMulai + d <= closeHour
+                          ? (_) => setState(() => _durasi = d)
+                          : null,
                     ),
                   ),
               ],
@@ -134,42 +157,14 @@ class _SlotSearchScreenState extends State<SlotSearchScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-            child: Row(
-              children: [
-                const Text('Jam:'),
-                const SizedBox(width: 8),
-                DropdownButton<int>(
-                  value: _jamMulai,
-                  items: [
-                    for (var h = 0; h < 24; h++)
-                      DropdownMenuItem(value: h, child: Text(hourLabel(h))),
-                  ],
-                  onChanged: (v) => setState(() {
-                    _jamMulai = v!;
-                    if (_jamSelesai <= _jamMulai) {
-                      _jamSelesai = _jamMulai + 1;
-                    }
-                  }),
-                ),
-                const Text(' – '),
-                DropdownButton<int>(
-                  value: _jamSelesai,
-                  items: [
-                    for (var h = 1; h <= 24; h++)
-                      DropdownMenuItem(value: h, child: Text(hourLabel(h))),
-                  ],
-                  onChanged: (v) => setState(() {
-                    _jamSelesai = v!;
-                    if (_jamMulai >= _jamSelesai) {
-                      _jamMulai = _jamSelesai - 1;
-                    }
-                  }),
-                ),
-              ],
+            child: Text(
+              'Rentang dicari: ${hourLabel(_jamMulai)} – ${hourLabel(_jamMulai + _durasi)}',
+              style: const TextStyle(
+                  fontSize: 12, color: DeofootTheme.textMuted),
             ),
           ),
           const Divider(height: 1),
-          // Hasil
+          // Hasil: daftar lapangan bebas pada rentang itu (D3)
           Expanded(
             child: StreamBuilder<List<Field>>(
               stream: fs.watchFields(),
@@ -186,75 +181,63 @@ class _SlotSearchScreenState extends State<SlotSearchScreen> {
                       fields =
                           fields.where((f) => f.category == _kat).toList();
                     }
-                    final perField = <String, List<Booking>>{};
-                    for (final b in snapB.data ?? []) {
-                      perField.putIfAbsent(b.fieldId, () => []).add(b);
-                    }
-                    final hasil = cariSlotKosong(
-                      fields: fields,
-                      bookingsPerField: perField,
-                      tanggal: dateStr,
-                      durasiJam: _durasi,
-                      jamMulai: _jamMulai,
-                      jamSelesai: _jamSelesai,
-                      now: DateTime.now(),
-                    );
+                    // Slot yang sudah lewat (hari ini) tidak ditawarkan —
+                    // konsisten dengan grid Jadwal.
+                    final now = DateTime.now();
+                    final sudahLewat = isPastSlot(_selected, _jamMulai, now);
+                    final hasil = sudahLewat
+                        ? const <Field>[]
+                        : lapanganBebas(
+                            fields: fields,
+                            bookings: snapB.data ?? [],
+                            tanggal: dateStr,
+                            jamMulai: _jamMulai,
+                            durasiJam: _durasi,
+                          );
                     if (hasil.isEmpty) {
                       return const Center(
                         child: Padding(
                           padding: EdgeInsets.all(24),
                           child: Text(
-                            'Tidak ada slot kosong yang cocok. Coba durasi lebih pendek atau jendela jam lain.',
+                            // Kalimat keadaan kosong spek D5 persis.
+                            'Tidak ada lapangan bebas pada jam itu — coba geser jam atau tanggal.',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: DeofootTheme.textMuted),
                           ),
                         ),
                       );
                     }
-                    // Kelompokkan per jam mulai.
-                    final grup = <int, List<SlotKosong>>{};
-                    for (final s in hasil) {
-                      grup.putIfAbsent(s.startHour, () => []).add(s);
-                    }
-                    final jamUrut = grup.keys.toList()..sort();
                     return ListView(
                       padding: const EdgeInsets.all(16),
                       children: [
-                        for (final jam in jamUrut) ...[
-                          Text(
-                            '${hourLabel(jam)} – ${hourLabel(grup[jam]!.first.endHour)}',
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: DeofootTheme.primary,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          for (final s in grup[jam]!)
-                            Card(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: s.field.color,
-                                  child: const Icon(Icons.sports_soccer,
-                                      color: Colors.white, size: 20),
+                        for (final f in hasil)
+                          Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: f.color,
+                                child: Text(
+                                  inisialNama(f.name),
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13),
                                 ),
-                                title: Text(s.field.name),
-                                subtitle: Text(
-                                    '${s.field.category} • ${fmtRupiah(s.field.pricePerHour)}/jam'),
-                                trailing: const Icon(Icons.chevron_right),
-                                onTap: () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => ScheduleScreen(
-                                      field: s.field,
-                                      initialDate: _selected,
-                                    ),
+                              ),
+                              title: Text(f.name),
+                              subtitle: Text(
+                                  '${f.category} • ${fmtRupiah(f.pricePerHour)}/jam'),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => ScheduleScreen(
+                                    field: f,
+                                    initialDate: _selected,
                                   ),
                                 ),
                               ),
                             ),
-                          const SizedBox(height: 8),
-                        ],
+                          ),
                       ],
                     );
                   },

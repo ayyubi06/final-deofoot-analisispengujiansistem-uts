@@ -1,0 +1,125 @@
+rules_version = '2';
+
+// =====================================================================
+// Firestore Rules v0.4 — HASIL REWORK (2026-10-21, marco).
+// STATUS: BELUM DIPUBLISH. Publish menunggu QA ulang inka + diff
+// terhadap console + persetujuan tuan muda.
+//
+// DASAR: teks rules LIVE persis seperti dipublish 2026-10-17
+// (lampiran bus 2026-10-17_1528_arsene_perbaikan-rules.md) dan
+// dikonfirmasi LULUS PENUH oleh inka (2026-10-17_1545), termasuk
+// hasOnly(['status']) pada jalur owner→cancelled yang ter-publish
+// menyusul keputusan trade-off tuan muda.
+//
+// Yang TIDAK berubah dari live (R1/R2 — jangan diutak-atik):
+// - blok users: persis live (create memaksa isAdmin == false;
+//   update: if false).
+// - bookings read: persis live (semua user login — trade-off yang
+//   diterima eksplisit tuan muda 2026-10-17).
+// - bookings update (owner-cancel hasOnly / admin / expire janitor)
+//   dan config: persis live.
+//
+// Penambahan SAJA, masing-masing ditandai [v0.4]:
+// 1. fields: admin boleh create/update (C). Read tetap publik live.
+// 2. bookings.create: hasOnly 15 kunci (+ pricePerHour snapshot C,
+//    + seriesId/seriesIndex E) dan R4: seriesId harus string & seri
+//    harus ada dan milik pembuat (get() ke subscriptions).
+// 3. match subscriptions BARU (E) — create ketat milik sendiri;
+//    update admin bebas; update user hanya (a) status → cancelled
+//    saja, atau (b) cancelledMeetingDates yang dijaga SUBSET (R3:
+//    elemen lama wajib utuh via hasAll, bukan hanya ukuran).
+// =====================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /fields/{id} {
+      allow read: if true;
+      // [v0.4 - C] tulis hanya admin (kelola lapangan dari aplikasi).
+      allow create, update: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      allow delete: if false;
+    }
+    match /config/{id} { allow read: if true; allow write: if false; }
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.isAdmin == false;
+      allow update: if false;
+    }
+    match /bookings/{id} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        // [v0.4] daftar kunci tertutup: 13 kunci booking biasa +
+        // pricePerHour (C) sudah termasuk; pertemuan seri menambah
+        // seriesId + seriesIndex (E).
+        && request.resource.data.keys().hasOnly([
+             'userId', 'userEmail', 'fieldId', 'fieldName', 'date',
+             'startTime', 'endTime', 'status', 'whatsapp', 'proofBase64',
+             'totalPrice', 'pricePerHour', 'seriesId', 'seriesIndex',
+             'createdAt'
+           ])
+        // [v0.4 - R4] bila membawa seriesId: harus string, seri harus
+        // ada, dan seri itu milik pembuat booking ini.
+        && (!('seriesId' in request.resource.data)
+            || (request.resource.data.seriesId is string
+                && get(/databases/$(database)/documents/subscriptions/$(request.resource.data.seriesId)).data.userId == request.auth.uid));
+      allow update: if request.auth != null && (
+        (request.auth.uid == resource.data.userId
+         && request.resource.data.status == 'cancelled'
+         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
+        || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
+        || (resource.data.status == 'pending'
+            && request.resource.data.status == 'expired'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+            && request.time > resource.data.createdAt + duration.value(30, 'm')));
+      allow delete: if false;
+    }
+    // [v0.4 BARU - E] Seri langganan slot rutin.
+    match /subscriptions/{id} {
+      allow read: if request.auth != null
+        && (request.auth.uid == resource.data.userId
+            || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true);
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.meetingsTotal >= 1
+        && request.resource.data.meetingsTotal <= 52
+        && request.resource.data.meetingDates.size()
+             == request.resource.data.meetingsTotal
+        && request.resource.data.proofBase64 is string
+        && request.resource.data.keys().hasOnly([
+             'userId', 'userEmail', 'fieldId', 'fieldName', 'weekday',
+             'startTime', 'endTime', 'pricePerHour', 'totalPerMeeting',
+             'meetingsTotal', 'startDate', 'endDate', 'meetingDates',
+             'whatsapp', 'proofBase64', 'status',
+             'cancelledMeetingDates', 'createdAt'
+           ]);
+      allow update: if request.auth != null && (
+        // Admin: verifikasi per seri (status → confirmed/rejected).
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
+        // User pemilik seri, salah satu dari dua jalur sempit:
+        || (request.auth.uid == resource.data.userId
+            && (
+              // (a) batalkan sisa seri: hanya status → 'cancelled';
+              (request.resource.data.status == 'cancelled'
+               && request.resource.data.diff(resource.data)
+                    .affectedKeys().hasOnly(['status']))
+              ||
+              // (b) catat tanggal pertemuan yang dibatalkan: hanya
+              // cancelledMeetingDates berubah, status tetap, dan
+              // [R3] daftar baru wajib SUPERSET daftar lama (hasAll)
+              // — elemen lama tidak boleh tertukar/hilang.
+              (request.resource.data.status == resource.data.status
+               && request.resource.data.diff(resource.data)
+                    .affectedKeys().hasOnly(['cancelledMeetingDates'])
+               && request.resource.data.cancelledMeetingDates
+                    .hasAll(resource.data.cancelledMeetingDates)
+               && request.resource.data.cancelledMeetingDates.size()
+                    >= resource.data.cancelledMeetingDates.size())
+            )));
+      allow delete: if false;
+    }
+  }
+}

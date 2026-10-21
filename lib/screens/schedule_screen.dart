@@ -205,8 +205,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   snap.data ?? [],
                   widget.field.id,
                   dateStr,
-                  openHour: widget.field.openHour,
-                  closeHour: widget.field.closeHour,
                 );
                 final now = DateTime.now();
                 return GridView.builder(
@@ -218,10 +216,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     crossAxisSpacing: 10,
                     mainAxisSpacing: 10,
                   ),
-                  itemCount:
-                      widget.field.closeHour - widget.field.openHour,
+                  itemCount: closeHour - openHour,
                   itemBuilder: (context, i) {
-                    final h = widget.field.openHour + i;
+                    final h = openHour + i;
                     final st = statuses[h] ?? SlotStatus.free;
                     final past =
                         isPastSlot(_selected, h, now) && st == SlotStatus.free;
