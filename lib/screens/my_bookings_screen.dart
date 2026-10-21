@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
-import '../theme.dart';
-import '../models.dart';
+
 import '../booking_logic.dart';
+import '../models.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
+import '../theme.dart';
+import '../widgets/pitch_components.dart';
+import 'user_series_screen.dart';
 
 /// Layar 6 — Booking Saya: tab Akan datang + Riwayat.
+/// (Fase G §3.6: kartu Pitch, chip status bertukar crossfade+blur,
+/// kartu seri membuka rincian seri pengguna. Fungsi & redaksi
+/// tidak berubah dari v0.4.1.)
 class MyBookingsScreen extends StatelessWidget {
   const MyBookingsScreen({super.key});
 
@@ -20,6 +26,9 @@ class MyBookingsScreen extends StatelessWidget {
         appBar: AppBar(
           title: const Text('Booking Saya'),
           bottom: const TabBar(
+            indicatorColor: DeofootTheme.volt,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
             tabs: [Tab(text: 'Akan datang'), Tab(text: 'Riwayat')],
           ),
         ),
@@ -28,13 +37,13 @@ class MyBookingsScreen extends StatelessWidget {
             // Catatan kejujuran cakupan notifikasi (spek A5, rework T15).
             Container(
               width: double.infinity,
-              color: DeofootTheme.primary.withValues(alpha: 0.06),
+              color: DeofootTheme.pitch700.withValues(alpha: 0.06),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: const Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(Icons.notifications_outlined,
-                      size: 16, color: DeofootTheme.textMuted),
+                      size: 16, color: DeofootTheme.pitch700),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -55,7 +64,14 @@ class MyBookingsScreen extends StatelessWidget {
                 stream: fs.watchMyBookings(uid),
                 builder: (context, snap) {
                   if (snap.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
+                    return ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: const [
+                        PitchSkeletonCard(),
+                        SizedBox(height: 16),
+                        PitchSkeletonCard(),
+                      ],
+                    );
                   }
                   final all = snap.data ?? [];
                   final upcoming = all.where((b) => b.isUpcoming).toList();
@@ -104,10 +120,21 @@ class _BookingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final b = booking;
     final canCancel = showCancel && b.canCancel;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: PitchCard(
+        // Kartu seri: ketuk -> rincian seri pengguna (§3.6).
+        onTap: b.seriesId == null
+            ? null
+            : () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => UserSeriesScreen(
+                      fieldName: b.fieldName,
+                      meetingsStream: FirestoreService()
+                          .watchBookingsBySeries(b.seriesId!),
+                    ),
+                  ),
+                ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -117,10 +144,10 @@ class _BookingCard extends StatelessWidget {
                 Flexible(
                   child: Text(
                     b.fieldName,
-                    style: const TextStyle(
+                    style: DeofootTheme.bodyStyle.copyWith(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: DeofootTheme.primary,
+                      color: DeofootTheme.pitch900,
                     ),
                   ),
                 ),
@@ -130,21 +157,21 @@ class _BookingCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: DeofootTheme.accent.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(20),
+                      color:
+                          DeofootTheme.volt.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(999),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.repeat,
-                            size: 12, color: DeofootTheme.accent),
-                        SizedBox(width: 4),
+                        const Icon(Icons.repeat,
+                            size: 12, color: DeofootTheme.pitch700),
+                        const SizedBox(width: 4),
                         Text(
                           'Langganan',
-                          style: TextStyle(
-                            fontSize: 11,
+                          style: DeofootTheme.captionStyle.copyWith(
                             fontWeight: FontWeight.w600,
-                            color: DeofootTheme.accent,
+                            color: DeofootTheme.pitch700,
                           ),
                         ),
                       ],
@@ -152,20 +179,25 @@ class _BookingCard extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: DeofootTheme.statusColor(b.status)
-                        .withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    DeofootTheme.statusLabel(b.status),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: DeofootTheme.statusColor(b.status),
+                // Chip status bertukar dengan crossfade+blur (§3.6)
+                // memakai bungkus yang sama dengan obat kedip grid.
+                StatusSwapFade(
+                  swapKey: b.status,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: DeofootTheme.statusColor(b.status)
+                          .withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      DeofootTheme.statusLabel(b.status),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: DeofootTheme.statusColor(b.status),
+                      ),
                     ),
                   ),
                 ),
@@ -173,10 +205,14 @@ class _BookingCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text('${b.date} • ${b.startTime}–${b.endTime}',
-                style:
-                    const TextStyle(color: DeofootTheme.textMuted)),
-            Text(fmtRupiah(b.totalPrice),
-                style: const TextStyle(fontWeight: FontWeight.w600)),
+                style: const TextStyle(color: DeofootTheme.textMuted)),
+            Text(
+              fmtRupiah(b.totalPrice),
+              style: DeofootTheme.tabular(
+                DeofootTheme.bodyStyle
+                    .copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
             if (showCancel) ...[
               const SizedBox(height: 12),
               SizedBox(
@@ -193,7 +229,8 @@ class _BookingCard extends StatelessWidget {
                           : DeofootTheme.booked,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(
+                          DeofootTheme.radiusButton),
                     ),
                   ),
                   child: const Text('Batalkan'),
@@ -224,7 +261,8 @@ class _BookingCard extends StatelessWidget {
                       foregroundColor: DeofootTheme.danger,
                       side: const BorderSide(color: DeofootTheme.danger),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(
+                            DeofootTheme.radiusButton),
                       ),
                     ),
                   ),

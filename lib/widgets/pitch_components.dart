@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 import '../motion.dart';
@@ -525,4 +528,72 @@ Future<T?> showPitchSheet<T>(
     ),
     builder: builder,
   );
+}
+
+
+/// Bungkus tukar status (§3.3 anti-kedip butir 2): saat [swapKey]
+/// berubah, isi bertukar dengan denyut crossfade singkat + blur
+/// 2px sesaat — tidak pernah ada frame kosong. Dipakai grid
+/// Jadwal dan chip status Booking Saya (§3.6). Mati bila
+/// reduced motion.
+class StatusSwapFade extends StatefulWidget {
+  const StatusSwapFade({super.key, required this.swapKey, required this.child});
+
+  final Object swapKey;
+  final Widget child;
+
+  @override
+  State<StatusSwapFade> createState() => _StatusSwapFadeState();
+}
+
+class _StatusSwapFadeState extends State<StatusSwapFade>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 180),
+      value: 1,
+    );
+  }
+
+  @override
+  void didUpdateWidget(StatusSwapFade old) {
+    super.didUpdateWidget(old);
+    if (old.swapKey != widget.swapKey &&
+        !PitchMotion.reducedMotion(context)) {
+      _ctrl.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, child) {
+        final t = _ctrl.value; // 0..1
+        final pulse = t >= 1 ? 0.0 : math.sin(t * math.pi);
+        final sigma = 2.0 * pulse;
+        final opacity = 1.0 - 0.12 * pulse;
+        Widget w = Opacity(opacity: opacity, child: child);
+        if (sigma > 0.05) {
+          w = ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+            child: w,
+          );
+        }
+        return w;
+      },
+      child: widget.child,
+    );
+  }
 }
