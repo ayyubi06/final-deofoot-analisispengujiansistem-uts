@@ -52,7 +52,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     } else {
       final d = DateTime(awal.year, awal.month, awal.day);
       _selected = (d.isBefore(today) ||
-              d.isAfter(today.add(const Duration(days: 59))))
+              d.isAfter(today.add(const Duration(days: 89))))
           ? today
           : d;
     }

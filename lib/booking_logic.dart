@@ -133,10 +133,13 @@ SlotSelection toggleSlot(
   return SlotSelection(ns, ne);
 }
 
-/// Rentang tanggal booking: hari ini → H+59 (60 hari).
+/// Rentang tanggal booking: hari ini → H+89 (90 hari).
+/// (G6 SPEK-V04 — keputusan tuan muda 2026-10-21 01:36, diputuskan
+/// berlaku pada checkpoint Fase G 2026-10-21 18:52; sebelumnya
+/// 60 hari dan keputusan 90 hari belum pernah terimplementasi.)
 List<DateTime> bookingDateRange(DateTime now) {
   final base = DateTime(now.year, now.month, now.day);
-  return List.generate(60, (i) => base.add(Duration(days: i)));
+  return List.generate(90, (i) => base.add(Duration(days: i)));
 }
 
 /// true bila slot [hour] pada tanggal [selected] sudah lewat.

@@ -266,13 +266,13 @@ group('toggleSlot (v0.3)', () {
   });
 });
 
-group('bookingDateRange (v0.3)', () {
-  test('60 hari: hari ini -> H+59', () {
+group('bookingDateRange (v0.3, G6)', () {
+  test('90 hari: hari ini -> H+89 (G6 berlaku sejak checkpoint Fase G)', () {
     final now = DateTime(2026, 10, 17, 15, 30);
     final days = bookingDateRange(now);
-    expect(days.length, 60);
+    expect(days.length, 90);
     expect(fmtDate(days.first), '2026-10-17');
-    expect(fmtDate(days.last), '2026-12-15');
+    expect(fmtDate(days.last), '2027-01-14');
   });
 });
 
