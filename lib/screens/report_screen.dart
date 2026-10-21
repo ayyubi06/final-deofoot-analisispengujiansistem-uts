@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
-import '../theme.dart';
-import '../models.dart';
+
 import '../booking_logic.dart';
+import '../models.dart';
 import '../report_logic.dart';
 import '../services/firestore_service.dart';
 import '../services/report_pdf_service.dart';
+import '../theme.dart';
+import '../widgets/pitch_components.dart';
 
 /// Layar Laporan (admin, Fase B v0.4): agregat booking Disetujui per
 /// rentang tanggal (hari ini / 7 hari terakhir / bulan ini / pilihan),
 /// jumlah per status, okupansi per lapangan, rincian per tanggal,
 /// dan export PDF.
+/// (Fase G §3.8: kartu Pitch, chip rentang Pitch, angka ringkasan
+/// number ticker dari 0 ±600 ms. Agregasi tidak berubah.)
 class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key});
 
@@ -100,6 +104,7 @@ class _ReportScreenState extends State<ReportScreen> {
               // Pilihan rentang
               Wrap(
                 spacing: 8,
+                runSpacing: 8,
                 children: [
                   _chip(JenisRentang.hariIni, 'Hari ini'),
                   _chip(JenisRentang.tujuhHariTerakhir, '7 hari terakhir'),
@@ -114,16 +119,32 @@ class _ReportScreenState extends State<ReportScreen> {
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () => _pilihTanggal(true),
-                        icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                        icon: const Icon(Icons.calendar_today_outlined,
+                            size: 18),
                         label: Text('Dari: ${fmtDate(mulai)}'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: DeofootTheme.pitch700,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                                DeofootTheme.radiusButton),
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () => _pilihTanggal(false),
-                        icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                        icon: const Icon(Icons.calendar_today_outlined,
+                            size: 18),
                         label: Text('Sampai: ${fmtDate(akhir)}'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: DeofootTheme.pitch700,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                                DeofootTheme.radiusButton),
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -136,29 +157,34 @@ class _ReportScreenState extends State<ReportScreen> {
               ),
               const SizedBox(height: 12),
               if (loading)
-                const Center(child: CircularProgressIndicator())
+                const PitchSkeletonCard()
               else ...[
-                // Ringkasan
+                // Ringkasan — angka menghitung dari 0 (§3.8).
                 Row(
                   children: [
-                    _stat('Booking\nDisetujui', '${lap.jumlahBooking}'),
+                    _stat('Booking\nDisetujui', lap.jumlahBooking,
+                        (v) => '$v'),
                     const SizedBox(width: 8),
-                    _stat('Slot\nterisi', '${lap.slotTerisi} jam'),
+                    _stat('Slot\nterisi', lap.slotTerisi, (v) => '$v jam'),
                     const SizedBox(width: 8),
-                    _stat('Pendapatan', fmtRupiah(lap.pendapatan)),
+                    _stat('Pendapatan', lap.pendapatan, fmtRupiah),
                   ],
                 ),
                 const Text(
                   'Pendapatan hanya dari booking Disetujui.',
-                  style: TextStyle(fontSize: 12, color: DeofootTheme.textMuted),
+                  style:
+                      TextStyle(fontSize: 12, color: DeofootTheme.textMuted),
                 ),
                 const SizedBox(height: 12),
                 // Jumlah booking per status (spek B3).
-                const Text('Jumlah per Status',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: DeofootTheme.primary)),
+                Text(
+                  'Jumlah per Status',
+                  style: DeofootTheme.bodyStyle.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: DeofootTheme.pitch900,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -178,63 +204,120 @@ class _ReportScreenState extends State<ReportScreen> {
                         ),
                         label: Text(
                             '${DeofootTheme.statusLabel(s)}: ${lap.jumlahPerStatus[s] ?? 0}'),
+                        backgroundColor: DeofootTheme.surfacePitch,
+                        side: BorderSide.none,
+                        shape: const StadiumBorder(),
                       ),
                   ],
                 ),
                 const SizedBox(height: 16),
-                const Text('Per Lapangan',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: DeofootTheme.primary)),
+                Text(
+                  'Per Lapangan',
+                  style: DeofootTheme.bodyStyle.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: DeofootTheme.pitch900,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 if (lap.perLapangan.isEmpty)
                   const Text('Tidak ada booking Disetujui pada periode ini.',
                       style: TextStyle(color: DeofootTheme.textMuted))
                 else
                   for (final a in lap.perLapangan)
-                    Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        title: Text(a.fieldName),
-                        subtitle: Text(
-                            '${a.jumlahBooking} booking • Okupansi '
-                            '${a.okupansiPersen.toStringAsFixed(1)}%'),
-                        trailing: Text(
-                          fmtRupiah(a.pendapatan),
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: PitchCard(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text(a.fieldName,
+                                      style: DeofootTheme.bodyStyle
+                                          .copyWith(
+                                              fontWeight:
+                                                  FontWeight.w700)),
+                                  Text(
+                                    '${a.jumlahBooking} booking • Okupansi '
+                                    '${a.okupansiPersen.toStringAsFixed(1)}%',
+                                    style: DeofootTheme.captionStyle
+                                        .copyWith(fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              fmtRupiah(a.pendapatan),
+                              style: DeofootTheme.tabular(
+                                DeofootTheme.bodyStyle.copyWith(
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
                 const SizedBox(height: 8),
-                const Text('Per Tanggal',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: DeofootTheme.primary)),
+                Text(
+                  'Per Tanggal',
+                  style: DeofootTheme.bodyStyle.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: DeofootTheme.pitch900,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 if (tanggalUrut.isEmpty)
                   const Text('Tidak ada data.',
                       style: TextStyle(color: DeofootTheme.textMuted))
                 else
                   for (final t in tanggalUrut)
-                    Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        title: Text(tanggalIndonesia(DateTime.parse(t))),
-                        subtitle:
-                            Text('${lap.bookingPerTanggal[t] ?? 0} booking'),
-                        trailing: Text(
-                          fmtRupiah(lap.pendapatanPerTanggal[t] ?? 0),
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: PitchCard(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    tanggalIndonesia(DateTime.parse(t)),
+                                    style: DeofootTheme.bodyStyle
+                                        .copyWith(
+                                            fontWeight: FontWeight.w700),
+                                  ),
+                                  Text(
+                                    '${lap.bookingPerTanggal[t] ?? 0} booking',
+                                    style: DeofootTheme.captionStyle
+                                        .copyWith(fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              fmtRupiah(lap.pendapatanPerTanggal[t] ?? 0),
+                              style: DeofootTheme.tabular(
+                                DeofootTheme.bodyStyle.copyWith(
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
                 const SizedBox(height: 16),
-                ElevatedButton.icon(
+                PitchButton(
+                  label: _exporting ? 'Membuat PDF…' : 'Export PDF',
                   onPressed: _exporting ? null : () => _export(lap),
-                  icon: const Icon(Icons.picture_as_pdf_outlined),
-                  label: Text(_exporting ? 'Membuat PDF…' : 'Export PDF'),
                 ),
               ],
             ],
@@ -245,38 +328,39 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Widget _chip(JenisRentang jenis, String label) {
-    final sel = _jenis == jenis;
-    return ChoiceChip(
-      label: Text(label),
-      selected: sel,
-      onSelected: (_) => setState(() => _jenis = jenis),
-      selectedColor: DeofootTheme.primary,
-      labelStyle: TextStyle(
-        color: sel ? Colors.white : DeofootTheme.primary,
-        fontWeight: FontWeight.w600,
-      ),
+    return PitchChip(
+      label: label,
+      selected: _jenis == jenis,
+      onTap: () => setState(() => _jenis = jenis),
     );
   }
 
-  Widget _stat(String label, String value) => Expanded(
-        child: Card(
-          margin: EdgeInsets.zero,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-            child: Column(
-              children: [
-                Text(value,
-                    style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: DeofootTheme.primary)),
-                const SizedBox(height: 4),
-                Text(label,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 11, color: DeofootTheme.textMuted)),
-              ],
-            ),
+  Widget _stat(String label, int value, String Function(int) format) =>
+      Expanded(
+        child: PitchCard(
+          padding:
+              const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+          child: Column(
+            children: [
+              NumberTicker(
+                value: value,
+                format: format,
+                fromZero: true,
+                duration: const Duration(milliseconds: 600),
+                style: DeofootTheme.tabular(
+                  DeofootTheme.bodyStyle.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: DeofootTheme.pitch900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(label,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 11, color: DeofootTheme.textMuted)),
+            ],
           ),
         ),
       );

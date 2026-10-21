@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 
 import '../motion.dart';
 import '../theme.dart';
@@ -445,19 +446,25 @@ class _PitchSkeletonCardState extends State<PitchSkeletonCard>
 
 /// Angka yang menghitung ke nilai baru (§3.3 bar bawah & §3.9):
 /// nilai ditampilkan selalu tabular (pemanggil menyediakan style
-/// tabular) dan berubah dengan animasi 250 ms easeOut dari nilai
-/// sebelumnya — bukan dari nol. Reduced motion: seketika.
+/// tabular) dan berubah dengan animasi easeOut dari nilai
+/// sebelumnya — bukan dari nol, KECUALI [fromZero] diminta
+/// (ringkasan Laporan §3.8: menghitung dari 0 saat layar dibuka,
+/// durasi ±600 ms lewat [duration]). Reduced motion: seketika.
 class NumberTicker extends StatefulWidget {
   const NumberTicker({
     super.key,
     required this.value,
     required this.format,
     required this.style,
+    this.fromZero = false,
+    this.duration = const Duration(milliseconds: 250),
   });
 
   final int value;
   final String Function(int) format;
   final TextStyle style;
+  final bool fromZero;
+  final Duration duration;
 
   @override
   State<NumberTicker> createState() => _NumberTickerState();
@@ -472,17 +479,27 @@ class _NumberTickerState extends State<NumberTicker>
   @override
   void initState() {
     super.initState();
-    _from = widget.value;
-    _shown = widget.value;
+    _from = widget.fromZero ? 0 : widget.value;
+    _shown = _from;
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 250),
+      duration: widget.duration,
     )..addListener(() {
         final t = PitchMotion.easeOut.transform(_ctrl.value);
         setState(() {
           _shown = (_from + (widget.value - _from) * t).round();
         });
       });
+    if (widget.fromZero && widget.value != 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (PitchMotion.reducedMotion(context)) {
+          setState(() => _shown = widget.value);
+        } else {
+          _ctrl.forward(from: 0);
+        }
+      });
+    }
   }
 
   @override
@@ -594,6 +611,104 @@ class _StatusSwapFadeState extends State<StatusSwapFade>
         return w;
       },
       child: widget.child,
+    );
+  }
+}
+
+/// Saklar Pitch (§3.8 Kelola Lapangan): pil 52x32, kenop meluncur
+/// dengan PEGAS (bukan Switch bawaan). Aktif = rel pitch700, kenop
+/// volt; nonaktif = rel garis, kenop putih. Ketuk memanggil
+/// [onChanged] dengan nilai berlawanan; null = nonaktif total.
+/// Reduced motion: kenop berpindah seketika.
+class PitchToggle extends StatefulWidget {
+  const PitchToggle({super.key, required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  State<PitchToggle> createState() => _PitchToggleState();
+}
+
+class _PitchToggleState extends State<PitchToggle>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController.unbounded(
+      vsync: this,
+      value: widget.value ? 1 : 0,
+    );
+  }
+
+  @override
+  void didUpdateWidget(PitchToggle old) {
+    super.didUpdateWidget(old);
+    if (old.value != widget.value) {
+      if (PitchMotion.reducedMotion(context)) {
+        _ctrl.value = widget.value ? 1 : 0;
+      } else {
+        _ctrl.animateWith(
+          SpringSimulation(
+            PitchMotion.spring(bounce: 0.15),
+            _ctrl.value,
+            widget.value ? 1 : 0,
+            0,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onChanged == null
+          ? null
+          : () => widget.onChanged!(!widget.value),
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (context, _) {
+          final t = _ctrl.value.clamp(0.0, 1.0);
+          return Container(
+            width: 52,
+            height: 32,
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: Color.lerp(
+                  DeofootTheme.line, DeofootTheme.pitch700, t),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Align(
+              alignment: Alignment(-1 + 2 * t, 0),
+              child: Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color.lerp(
+                      Colors.white, DeofootTheme.volt, t),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x1F0A231B),
+                      blurRadius: 4,
+                      offset: Offset(0, 1),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }

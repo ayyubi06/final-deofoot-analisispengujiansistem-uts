@@ -1,15 +1,20 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import '../theme.dart';
-import '../models.dart';
+
 import '../booking_logic.dart';
-import '../verify_logic.dart';
+import '../models.dart';
 import '../report_logic.dart' show namaHari, tanggalIndonesia;
 import '../services/firestore_service.dart';
+import '../theme.dart';
+import '../verify_logic.dart';
+import '../widgets/pitch_components.dart';
 
 /// Layar 8 — Verifikasi (admin): list booking pending individual +
 /// Terima/Tolak, dan seri langganan pending yang dikonfirmasi SATU
 /// kali per seri lewat rincian seri (Fase E + Addendum 4 SPEK-V04).
+/// (Fase G §3.8: kartu Pitch, rincian seri sebagai sheet layar
+/// penuh, thumbnail bukti -> pratinjau penuh shared element.)
 class VerifyScreen extends StatelessWidget {
   const VerifyScreen({super.key});
 
@@ -38,6 +43,42 @@ class VerifyScreen extends StatelessWidget {
   }
 }
 
+/// Pratinjau bukti transfer layar penuh (§3.8): tujuan Hero dari
+/// thumbnail di kartu verifikasi & rincian seri.
+class ProofPreviewScreen extends StatelessWidget {
+  final String heroTag;
+  final Uint8List bytes;
+  const ProofPreviewScreen({
+    super.key,
+    required this.heroTag,
+    required this.bytes,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: DeofootTheme.pitch900,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: const Text(
+          'Bukti transfer',
+          style: TextStyle(color: Colors.white),
+        ),
+      ),
+      body: Center(
+        child: Hero(
+          tag: heroTag,
+          child: InteractiveViewer(
+            child: Image.memory(bytes, fit: BoxFit.contain),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SectionTitle extends StatelessWidget {
   final String text;
   const _SectionTitle(this.text);
@@ -48,10 +89,10 @@ class _SectionTitle extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         text,
-        style: const TextStyle(
+        style: DeofootTheme.bodyStyle.copyWith(
           fontSize: 16,
           fontWeight: FontWeight.bold,
-          color: DeofootTheme.primary,
+          color: DeofootTheme.pitch900,
         ),
       ),
     );
@@ -67,7 +108,7 @@ class _PendingBookings extends StatelessWidget {
       stream: FirestoreService().watchPending(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const PitchSkeletonCard();
         }
         // Pertemuan seri TIDAK tampil di sini — seri dikonfirmasi
         // satu kali lewat kartu seri (Addendum 4).
@@ -96,7 +137,7 @@ class _PendingSeries extends StatelessWidget {
       stream: FirestoreService().watchPendingSeries(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const PitchSkeletonCard();
         }
         final items = snap.data ?? [];
         if (items.isEmpty) {
@@ -111,9 +152,62 @@ class _PendingSeries extends StatelessWidget {
   }
 }
 
+/// Buka rincian seri sebagai SHEET layar penuh (§3.8) — isi &
+/// keputusan sama dengan SeriesDetailScreen; Terima/Tolak tetap
+/// satu kali per seri lewat setSeriesStatus.
+void _openSeriesSheet(BuildContext context, SubscriptionSeries s) {
+  showPitchSheet<void>(
+    context,
+    isScrollControlled: true,
+    builder: (sheetContext) => FractionallySizedBox(
+      heightFactor: 0.92,
+      child: StreamBuilder<List<Booking>>(
+        stream: FirestoreService().watchBookingsBySeries(s.id),
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Padding(
+              padding: EdgeInsets.all(16),
+              child: PitchSkeletonCard(),
+            );
+          }
+          final meetings = pertemuanSeriUrut(snap.data ?? []);
+          return SeriesDetailView(
+            series: s,
+            meetings: meetings,
+            onDecision: (terima) async {
+              final messenger = ScaffoldMessenger.of(context);
+              final navigator = Navigator.of(sheetContext);
+              try {
+                await FirestoreService().setSeriesStatus(
+                  s.id,
+                  terima ? 'confirmed' : 'rejected',
+                );
+                navigator.pop();
+                messenger.showSnackBar(
+                  SnackBar(
+                      content: Text(terima
+                          ? 'Seri disetujui, semua pertemuan aktif.'
+                          : 'Seri ditolak, semua slot kembali bebas.')),
+                );
+              } catch (e) {
+                debugPrint('SeriesSheet._proses gagal: $e');
+                messenger.showSnackBar(
+                  const SnackBar(
+                      content: Text('Gagal memproses. Coba lagi.'),
+                      backgroundColor: DeofootTheme.danger),
+                );
+              }
+            },
+          );
+        },
+      ),
+    ),
+  );
+}
+
 /// Kartu ringkas seri langganan pending (Addendum 4): pemesan,
 /// lapangan, pola hari + jam, jumlah pertemuan, total seri.
-/// Diketuk -> rincian seri; konfirmasi HANYA dari rincian itu.
+/// Diketuk -> rincian seri (sheet); konfirmasi HANYA dari rincian.
 class _SeriesCard extends StatelessWidget {
   final SubscriptionSeries series;
   const _SeriesCard({required this.series});
@@ -124,56 +218,51 @@ class _SeriesCard extends StatelessWidget {
     final hari = s.meetingDates.isNotEmpty
         ? namaHari(DateTime.parse(s.meetingDates.first))
         : '-';
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => SeriesDetailScreen(series: s),
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.repeat,
-                            size: 18, color: DeofootTheme.accent),
-                        const SizedBox(width: 6),
-                        const Text('Langganan rutin',
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                        const Spacer(),
-                        Text('${s.meetingsTotal} pertemuan',
-                            style: const TextStyle(
-                                color: DeofootTheme.textMuted)),
-                      ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: PitchCard(
+        onTap: () => _openSeriesSheet(context, s),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.repeat,
+                          size: 18, color: DeofootTheme.pitch700),
+                      const SizedBox(width: 6),
+                      const Text('Langganan rutin',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      Text('${s.meetingsTotal} pertemuan',
+                          style: const TextStyle(
+                              color: DeofootTheme.textMuted)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(s.userEmail,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${s.fieldName} \u2022 setiap $hari ${s.startTime}\u2013${s.endTime}',
+                    style: const TextStyle(color: DeofootTheme.textMuted),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Total: ${fmtRupiah(s.totalHarga)}',
+                    style: DeofootTheme.tabular(
+                      DeofootTheme.bodyStyle
+                          .copyWith(fontWeight: FontWeight.w600),
                     ),
-                    const SizedBox(height: 8),
-                    Text(s.userEmail,
-                        style:
-                            const TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${s.fieldName} \u2022 setiap $hari ${s.startTime}\u2013${s.endTime}',
-                      style: const TextStyle(color: DeofootTheme.textMuted),
-                    ),
-                    const SizedBox(height: 4),
-                    Text('Total: ${fmtRupiah(s.totalHarga)}',
-                        style:
-                            const TextStyle(fontWeight: FontWeight.w600)),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const Icon(Icons.chevron_right,
-                  color: DeofootTheme.textMuted),
-            ],
-          ),
+            ),
+            const Icon(Icons.chevron_right,
+                color: DeofootTheme.textMuted),
+          ],
         ),
       ),
     );
@@ -183,7 +272,8 @@ class _SeriesCard extends StatelessWidget {
 /// Layar Rincian Langganan (Addendum 4): bukti bayar seri + daftar
 /// semua pertemuan beserta statusnya; Terima/Tolak seri SATU kali
 /// dari sini -> setSeriesStatus yang sudah ada (atomik; pertemuan
-/// cancelled tidak ikut berubah).
+/// cancelled tidak ikut berubah). (Di Fase G, kartu seri membuka
+/// isi yang sama sebagai sheet — layar ini dipertahankan.)
 class SeriesDetailScreen extends StatelessWidget {
   final SubscriptionSeries series;
   const SeriesDetailScreen({super.key, required this.series});
@@ -196,7 +286,10 @@ class SeriesDetailScreen extends StatelessWidget {
         stream: FirestoreService().watchBookingsBySeries(series.id),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Padding(
+              padding: EdgeInsets.all(16),
+              child: PitchSkeletonCard(),
+            );
           }
           final meetings = pertemuanSeriUrut(snap.data ?? []);
           return SeriesDetailView(
@@ -259,7 +352,7 @@ class SeriesDetailView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _bukti(),
+        _bukti(context),
         const SizedBox(height: 12),
         Text(s.userEmail,
             style: const TextStyle(
@@ -285,26 +378,33 @@ class SeriesDetailView extends StatelessWidget {
           style: const TextStyle(color: DeofootTheme.textMuted),
         ),
         const SizedBox(height: 16),
-        const Text('Daftar pertemuan',
-            style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: DeofootTheme.primary)),
+        Text(
+          'Daftar pertemuan',
+          style: DeofootTheme.bodyStyle.copyWith(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: DeofootTheme.pitch900,
+          ),
+        ),
         const SizedBox(height: 8),
         if (meetings.isEmpty)
           const Text('Belum ada data pertemuan.',
               style: TextStyle(color: DeofootTheme.textMuted))
         else
           for (final b in meetings)
-            Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                dense: true,
-                title: Text(
-                    '${tanggalIndonesia(DateTime.parse(b.date))} \u2022 ${b.startTime}\u2013${b.endTime}'),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: PitchCard(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 12),
+                child: Row(
                   children: [
+                    Expanded(
+                      child: Text(
+                        '${tanggalIndonesia(DateTime.parse(b.date))} \u2022 ${b.startTime}\u2013${b.endTime}',
+                        style: DeofootTheme.bodyStyle,
+                      ),
+                    ),
                     CircleAvatar(
                       backgroundColor: DeofootTheme.statusColor(b.status),
                       radius: 5,
@@ -323,39 +423,30 @@ class SeriesDetailView extends StatelessWidget {
           children: [
             const Text('Total seri',
                 style: TextStyle(color: DeofootTheme.textMuted)),
-            Text(fmtRupiah(s.totalHarga),
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: DeofootTheme.primary)),
+            Text(
+              fmtRupiah(s.totalHarga),
+              style: DeofootTheme.tabular(
+                DeofootTheme.titleStyle
+                    .copyWith(color: DeofootTheme.pitch700),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 16),
         Row(
           children: [
             Expanded(
-              child: ElevatedButton(
+              child: PitchButton(
+                label: 'Terima seri',
                 onPressed: () => _confirm(context, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: DeofootTheme.available,
-                  minimumSize: const Size(0, 48),
-                ),
-                child: const Text('Terima seri'),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: OutlinedButton(
+              child: PitchButton(
+                label: 'Tolak seri',
+                variant: PitchButtonVariant.danger,
                 onPressed: () => _confirm(context, false),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: DeofootTheme.danger,
-                  side: const BorderSide(color: DeofootTheme.danger),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  minimumSize: const Size(0, 48),
-                ),
-                child: const Text('Tolak seri'),
               ),
             ),
           ],
@@ -364,17 +455,31 @@ class SeriesDetailView extends StatelessWidget {
     );
   }
 
-  Widget _bukti() {
+  Widget _bukti(BuildContext context) {
     final s = series;
     if (s.proofBase64 != null && s.proofBase64!.isNotEmpty) {
       try {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.memory(
-            base64Decode(s.proofBase64!),
-            height: 200,
-            width: double.infinity,
-            fit: BoxFit.cover,
+        final bytes = base64Decode(s.proofBase64!);
+        final tag = 'proof-series-${s.id}';
+        return GestureDetector(
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  ProofPreviewScreen(heroTag: tag, bytes: bytes),
+            ),
+          ),
+          child: Hero(
+            tag: tag,
+            child: ClipRRect(
+              borderRadius:
+                  BorderRadius.circular(DeofootTheme.radiusCard),
+              child: Image.memory(
+                bytes,
+                height: 200,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            ),
           ),
         );
       } catch (_) {
@@ -384,8 +489,8 @@ class SeriesDetailView extends StatelessWidget {
     return Container(
       height: 80,
       decoration: BoxDecoration(
-        color: DeofootTheme.background,
-        borderRadius: BorderRadius.circular(8),
+        color: DeofootTheme.surfacePitch,
+        borderRadius: BorderRadius.circular(DeofootTheme.radiusCard),
       ),
       child: const Center(
         child: Text('Bukti tidak tersedia',
@@ -467,25 +572,27 @@ class _Dashboard extends StatelessWidget {
   }
 
   Widget _stat(String label, String value) => Expanded(
-        child: Card(
-          margin: EdgeInsets.zero,
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-            child: Column(
-              children: [
-                Text(value,
-                    style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: DeofootTheme.primary)),
-                const SizedBox(height: 4),
-                Text(label,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 11, color: DeofootTheme.textMuted)),
-              ],
-            ),
+        child: PitchCard(
+          padding:
+              const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+          child: Column(
+            children: [
+              Text(
+                value,
+                style: DeofootTheme.tabular(
+                  DeofootTheme.bodyStyle.copyWith(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: DeofootTheme.pitch900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(label,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 11, color: DeofootTheme.textMuted)),
+            ],
           ),
         ),
       );
@@ -498,32 +605,13 @@ class _PendingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final b = booking;
-    Widget thumb;
-    if (b.proofBase64 != null && b.proofBase64!.isNotEmpty) {
-      try {
-        thumb = ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.memory(
-            base64Decode(b.proofBase64!),
-            height: 120,
-            width: double.infinity,
-            fit: BoxFit.cover,
-          ),
-        );
-      } catch (_) {
-        thumb = _noProof();
-      }
-    } else {
-      thumb = _noProof();
-    }
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: PitchCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            thumb,
+            _thumb(context),
             const SizedBox(height: 12),
             Text(b.userEmail,
                 style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -543,37 +631,28 @@ class _PendingCard extends StatelessWidget {
                 '${b.fieldName} • ${b.date} • ${b.startTime}–${b.endTime}',
                 style:
                     const TextStyle(color: DeofootTheme.textMuted)),
-            Text('Total: ${fmtRupiah(b.totalPrice)}',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(
+              'Total: ${fmtRupiah(b.totalPrice)}',
+              style: DeofootTheme.tabular(
+                DeofootTheme.bodyStyle
+                    .copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
-                  child: ElevatedButton(
-                    onPressed: () =>
-                        _confirm(context, true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: DeofootTheme.available,
-                      minimumSize: const Size(0, 44),
-                    ),
-                    child: const Text('Terima'),
+                  child: PitchButton(
+                    label: 'Terima',
+                    onPressed: () => _confirm(context, true),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: OutlinedButton(
-                    onPressed: () =>
-                        _confirm(context, false),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: DeofootTheme.danger,
-                      side: const BorderSide(
-                          color: DeofootTheme.danger),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      minimumSize: const Size(0, 44),
-                    ),
-                    child: const Text('Tolak'),
+                  child: PitchButton(
+                    label: 'Tolak',
+                    variant: PitchButtonVariant.danger,
+                    onPressed: () => _confirm(context, false),
                   ),
                 ),
               ],
@@ -584,11 +663,45 @@ class _PendingCard extends StatelessWidget {
     );
   }
 
+  Widget _thumb(BuildContext context) {
+    final b = booking;
+    if (b.proofBase64 != null && b.proofBase64!.isNotEmpty) {
+      try {
+        final bytes = base64Decode(b.proofBase64!);
+        final tag = 'proof-${b.id}';
+        return GestureDetector(
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  ProofPreviewScreen(heroTag: tag, bytes: bytes),
+            ),
+          ),
+          child: Hero(
+            tag: tag,
+            child: ClipRRect(
+              borderRadius:
+                  BorderRadius.circular(DeofootTheme.radiusCard),
+              child: Image.memory(
+                bytes,
+                height: 120,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+        );
+      } catch (_) {
+        // jatuh ke placeholder di bawah
+      }
+    }
+    return _noProof();
+  }
+
   Widget _noProof() => Container(
         height: 80,
         decoration: BoxDecoration(
-          color: DeofootTheme.background,
-          borderRadius: BorderRadius.circular(8),
+          color: DeofootTheme.surfacePitch,
+          borderRadius: BorderRadius.circular(DeofootTheme.radiusCard),
         ),
         child: const Center(
           child: Text('Bukti tidak tersedia',

@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
-import '../theme.dart';
-import '../models.dart';
+
 import '../booking_logic.dart';
 import '../field_logic.dart';
+import '../models.dart';
 import '../services/firestore_service.dart';
+import '../theme.dart';
+import '../widgets/pitch_components.dart';
 
 /// Layar Kelola Lapangan (admin, Fase C v0.4): daftar semua lapangan
 /// (termasuk nonaktif), tambah, ubah (nama, kategori, harga, warna),
 /// dan aktif/nonaktifkan. Lapangan TIDAK dihapus permanen dari
 /// aplikasi — nonaktifkan adalah penggantinya.
+/// (Fase G §3.8: kartu Pitch, avatar radius 20, saklar pegas
+/// PitchToggle, kartu nonaktif meredup di tempat, chip warna
+/// bercincin volt saat terpilih.)
 class FieldAdminScreen extends StatelessWidget {
   const FieldAdminScreen({super.key});
 
@@ -21,7 +26,14 @@ class FieldAdminScreen extends StatelessWidget {
         stream: fs.watchFields(),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: const [
+                PitchSkeletonCard(),
+                SizedBox(height: 16),
+                PitchSkeletonCard(),
+              ],
+            );
           }
           final fields = snap.data ?? [];
           if (fields.isEmpty) {
@@ -62,43 +74,10 @@ class _FieldAdminCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final f = field;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: f.color,
-          child: Text(
-            inisialNama(f.name),
-            style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-        ),
-        title: Text(f.name,
-            style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(
-          '${f.category} • ${fmtRupiah(f.pricePerHour)}/jam'
-          '${f.isActive ? '' : ' • NONAKTIF'}',
-        ),
-        trailing: Switch(
-          value: f.isActive,
-          onChanged: (v) async {
-            final messenger = ScaffoldMessenger.of(context);
-            try {
-              await FirestoreService().setFieldActive(f.id, v);
-              messenger.showSnackBar(SnackBar(
-                content: Text(v
-                    ? '${f.name} diaktifkan.'
-                    : '${f.name} dinonaktifkan (disembunyikan dari user).'),
-              ));
-            } catch (e) {
-              debugPrint('FieldAdmin setFieldActive gagal: $e');
-              messenger.showSnackBar(const SnackBar(
-                content: Text('Gagal mengubah status. Coba lagi.'),
-                backgroundColor: DeofootTheme.danger,
-              ));
-            }
-          },
-        ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: PitchCard(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         onTap: () async {
           final fields = await FirestoreService().watchFields().first;
           if (!context.mounted) return;
@@ -111,6 +90,76 @@ class _FieldAdminCard extends StatelessWidget {
             ),
           );
         },
+        child: Row(
+          children: [
+            // Identitas + nama meredup di tempat saat nonaktif (§3.8);
+            // saklarnya sendiri tetap jelas & bisa diketuk.
+            Expanded(
+              child: AnimatedOpacity(
+                opacity: f.isActive ? 1 : 0.55,
+                duration: const Duration(milliseconds: 200),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: f.color,
+                        borderRadius: BorderRadius.circular(
+                            DeofootTheme.radiusCard),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        inisialNama(f.name),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(f.name,
+                              style: DeofootTheme.bodyStyle.copyWith(
+                                  fontWeight: FontWeight.w600)),
+                          Text(
+                            '${f.category} • ${fmtRupiah(f.pricePerHour)}/jam'
+                            '${f.isActive ? '' : ' • NONAKTIF'}',
+                            style: DeofootTheme.captionStyle
+                                .copyWith(fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            PitchToggle(
+              value: f.isActive,
+              onChanged: (v) async {
+                final messenger = ScaffoldMessenger.of(context);
+                try {
+                  await FirestoreService().setFieldActive(f.id, v);
+                  messenger.showSnackBar(SnackBar(
+                    content: Text(v
+                        ? '${f.name} diaktifkan.'
+                        : '${f.name} dinonaktifkan (disembunyikan dari user).'),
+                  ));
+                } catch (e) {
+                  debugPrint('FieldAdmin setFieldActive gagal: $e');
+                  messenger.showSnackBar(const SnackBar(
+                    content: Text('Gagal mengubah status. Coba lagi.'),
+                    backgroundColor: DeofootTheme.danger,
+                  ));
+                }
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -256,28 +305,45 @@ class _FieldFormScreenState extends State<FieldFormScreen> {
             _label('Warna identitas'),
             Wrap(
               spacing: 8,
+              runSpacing: 8,
               children: [
                 for (final (namaWarna, argb) in _warnaPreset)
-                  ChoiceChip(
-                    label: Text(namaWarna),
-                    avatar: CircleAvatar(
-                      backgroundColor: Color(argb),
-                      radius: 8,
-                    ),
+                  _ColorChip(
+                    label: namaWarna,
+                    color: Color(argb),
                     selected: _warnaArgb == argb,
-                    onSelected: (_) => setState(() => _warnaArgb = argb),
+                    onTap: () => setState(() => _warnaArgb = argb),
                   ),
               ],
             ),
-            const SizedBox(height: 8),
-            SwitchListTile(
-              title: const Text('Lapangan aktif'),
-              subtitle: const Text(
-                  'Nonaktif = disembunyikan dari user & tidak bisa dibooking. Riwayat booking lama tetap utuh.'),
-              value: _aktif,
-              onChanged: (v) => setState(() => _aktif = v),
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Lapangan aktif',
+                          style: DeofootTheme.bodyStyle
+                              .copyWith(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Nonaktif = disembunyikan dari user & tidak bisa dibooking. Riwayat booking lama tetap utuh.',
+                        style: TextStyle(
+                            fontSize: 12, color: DeofootTheme.textMuted),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                PitchToggle(
+                  value: _aktif,
+                  onChanged: (v) => setState(() => _aktif = v),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
             const Text(
               'Catatan foto: foto lapangan mengikuti id-nya '
               '(assets/images/fields/<id>.jpg). Lapangan baru tanpa '
@@ -286,16 +352,20 @@ class _FieldFormScreenState extends State<FieldFormScreen> {
               style: TextStyle(fontSize: 12, color: DeofootTheme.textMuted),
             ),
             const SizedBox(height: 24),
-            ElevatedButton(
+            if (_saving) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: const LinearProgressIndicator(
+                  minHeight: 4,
+                  color: DeofootTheme.pitch700,
+                  backgroundColor: DeofootTheme.line,
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            PitchButton(
+              label: _saving ? 'Menyimpan…' : 'Simpan',
               onPressed: _saving ? null : _simpan,
-              child: _saving
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Text('Simpan'),
             ),
           ],
         ),
@@ -305,8 +375,61 @@ class _FieldFormScreenState extends State<FieldFormScreen> {
 
   Widget _label(String t) => Padding(
         padding: const EdgeInsets.only(bottom: 4),
-        child: Text(t,
-            style: const TextStyle(
-                fontWeight: FontWeight.w600, color: DeofootTheme.primary)),
+        child: Text(
+          t,
+          style: DeofootTheme.bodyStyle.copyWith(
+            fontWeight: FontWeight.w600,
+            color: DeofootTheme.pitch900,
+          ),
+        ),
       );
+}
+
+/// Chip warna form lapangan: contoh warna + nama; yang terpilih
+/// mendapat CINCIN VOLT (§3.8).
+class _ColorChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ColorChip({
+    required this.label,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected
+              ? DeofootTheme.volt.withValues(alpha: 0.18)
+              : DeofootTheme.card,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected ? DeofootTheme.volt : DeofootTheme.line,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(backgroundColor: color, radius: 8),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: DeofootTheme.bodyStyle.copyWith(
+                fontWeight: FontWeight.w600,
+                color: DeofootTheme.pitch900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

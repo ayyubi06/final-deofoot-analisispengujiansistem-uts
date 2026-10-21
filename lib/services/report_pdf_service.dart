@@ -5,12 +5,19 @@ import 'package:printing/printing.dart';
 import '../booking_logic.dart';
 import '../report_logic.dart';
 
+/// Label periode KHUSUS PDF (Fase G §3.8, perbaikan wajib):
+/// en-dash "–" tampil sebagai kotak di PDF v0.4 (glyph tidak ada
+/// di font standar PDF), jadi rentang ditulis dengan "s.d.".
+/// Label di layar aplikasi tidak berubah — hanya salinan PDF.
+String labelPeriodePdf(String label) => label.replaceAll('–', 's.d.');
+
 /// Pembuat PDF laporan admin (Fase B v0.4) dari hasil agregasi murni
 /// [LaporanPeriode]. PDF dapat dibagikan / disimpan / dicetak lewat
 /// package printing.
 class ReportPdfService {
   /// Susun dokumen PDF laporan. [labelPeriode] teks manusiawi, mis.
-  /// "Rabu, 21 Oktober 2026" atau "19 Oktober 2026 – 25 Oktober 2026".
+  /// "Rabu, 21 Oktober 2026" atau "19 Oktober 2026 – 25 Oktober 2026"
+  /// (di dalam PDF, "–" diganti "s.d." — lihat [labelPeriodePdf]).
   Future<Uint8List> buildPdf({
     required LaporanPeriode lap,
     required String labelPeriode,
@@ -26,7 +33,7 @@ class ReportPdfService {
           pw.Text('Laporan Deofoot',
               style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 4),
-          pw.Text('Periode: $labelPeriode'),
+          pw.Text('Periode: ${labelPeriodePdf(labelPeriode)}'),
           pw.Text('Dicetak: ${tanggalIndonesia(tanggalCetak)}'),
           pw.SizedBox(height: 16),
           pw.Text('Ringkasan', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
