@@ -1,0 +1,51 @@
+# Maestro flow — BDD-01 Booking happy path (Deofoot 1.5.0, P11).
+# Pasangan 1-ke-1: features/bdd-01-booking-happy-path.feature
+# appId: com.deofoot.app (applicationId rilis 1.5.0; bila build debug
+# memakai suffix, sesuaikan appId sebelum jalan).
+#
+# PRASYARAT (lihat .feature): instalasi fresh/belum login; akun uji
+# khusus sudah dibuat; lapangan Futsal pertama Rp120.000/jam; slot
+# 10.00 hari ini bebas. Ganti AKUN_UJI@deofoot.test dan
+# KATA_SANDI_AKUN_UJI dengan kredensial akun uji sebelum jalan.
+# JANGAN memakai akun asli, akun admin, atau data pengguna asli.
+#
+# BATAS: flow berhenti pada lembar pilih bukti (titik terakhir yang
+# bisa diverifikasi di dalam aplikasi). Penyelesaian pengiriman +
+# verifikasi pending adalah langkah MANUAL (lihat .feature dan
+# laporan 06). Flow ini TIDAK menekan Kirim Booking.
+appId: com.deofoot.app
+---
+- launchApp
+- assertVisible: "Masuk"
+- tapOn: "Masuk"
+- tapOn: "Email"
+- inputText: "AKUN_UJI@deofoot.test"
+- hideKeyboard
+- tapOn: "Password"
+- inputText: "KATA_SANDI_AKUN_UJI"
+- hideKeyboard
+- tapOn:
+    point: "50%, 55%"
+- assertVisible: "Deofoot"
+- assertVisible: "Semua"
+- tapOn: "Futsal"
+- tapOn: "Rp120.000/jam"
+- assertVisible: "Tanggal main"
+- tapOn: "10.00"
+- assertVisible: "1 jam · 10.00–11.00"
+- tapOn: "Lanjut"
+- assertVisible: "Booking Lapangan"
+- assertVisible: "Ringkasan booking"
+- assertVisible: "Nomor WhatsApp"
+- assertVisible: "Pembayaran"
+- assertVisible: "Bukti transfer"
+- tapOn: "Nomor WhatsApp aktif"
+- inputText: "081200000000"
+- hideKeyboard
+- assertVisible: "Pilih bukti transfer dulu untuk mengaktifkan tombol."
+- tapOn: "Pilih bukti transfer"
+- assertVisible: "Ambil foto"
+- assertVisible: "Pilih dari galeri"
+# AKHIR FLOW — titik batas (lihat header). Langkah manual berikutnya
+# ada di .feature dan laporan 06; jangan ditambahkan ke flow ini
+# tanpa mengubah status kejujuran di laporan.
