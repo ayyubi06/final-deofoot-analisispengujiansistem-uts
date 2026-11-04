@@ -4,8 +4,9 @@ Deofoot 1.5.0 · Repo: ayyubi06/final-deofoot-analisispengujiansistem-uts
 Branch: `fitur/bdd-integration-usability-p11`
 SHA main awal (terverifikasi saat branch dibuat, 29 Okt 2026):
 `0b49e686952f900eba219140ae437b3b85692021`
-PR draft: [MENUNGGU: tautan PR setelah push — laporan ini diperbarui
-dengan commit kedua setelah PR dibuat]
+PR draft: https://github.com/ayyubi06/final-deofoot-analisispengujiansistem-uts/pull/1
+("P11: BDD / integration / usability Deofoot 1.5.0 (DRAFT)", dibuat
+4 Nov 2026 11:19 WIB; head `efe5d63`, base `main` `0b49e68`)
 
 > KEJUJURAN UTAMA: flow Maestro dalam paket ini TIDAK bisa lolos
 > utuh di perangkat uji, BUKAN karena aplikasi rusak, melainkan karena
