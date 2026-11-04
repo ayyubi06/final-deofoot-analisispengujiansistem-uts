@@ -1,0 +1,49 @@
+# Maestro flow — BDD-05 Seri mingguan (Deofoot 1.5.0, P11).
+# Pasangan 1-ke-1: features/bdd-05-seri-mingguan.feature
+#
+# PRASYARAT: instalasi fresh/belum login; akun uji sudah dibuat;
+# lapangan Futsal pertama ada.
+#
+# TITIK RAPUH (dicatat di laporan): tombol masuk "Langganan Rutin"
+# di jadwal adalah tombol ikon tanpa teks; flow mengetuknya lewat
+# label tooltip/semantik "Langganan rutin". Bila Maestro pada
+# perangkat pelaksana tidak bisa menyelesaikan tombol ikon lewat
+# label itu, flow gagal di langkah ini — catat sebagai kerapuhan,
+# jangan ganti dengan koordinat piksel tanpa mencatatnya.
+#
+# BATAS: sama seperti BDD-01 — flow berhenti pada lembar pilih
+# bukti. Sifat "satu konfirmasi = satu transaksi" diverifikasi
+# lewat baca-saja dokumen (lihat INT-01), bukan UI.
+appId: com.deofoot.app
+---
+- launchApp
+- assertVisible: "Masuk"
+- tapOn: "Masuk"
+- tapOn: "Email"
+- inputText: "AKUN_UJI@deofoot.test"
+- hideKeyboard
+- tapOn: "Password"
+- inputText: "KATA_SANDI_AKUN_UJI"
+- hideKeyboard
+- tapOn:
+    point: "50%, 55%"
+- assertVisible: "Deofoot"
+- assertVisible: "Semua"
+- tapOn: "Futsal"
+- tapOn: "Rp120.000/jam"
+- assertVisible: "Tanggal main"
+- tapOn: "Langganan rutin"
+- assertVisible: "Langganan Rutin"
+- assertVisible: "Atur seri mingguan"
+- assertVisible: "4×"
+- assertVisible: "Setiap"
+- assertVisible: "Periode"
+- assertVisible: "Kirim Langganan"
+- tapOn: "Nomor WhatsApp aktif"
+- inputText: "081200000000"
+- hideKeyboard
+- assertVisible: "Pilih bukti transfer dulu untuk mengaktifkan tombol."
+- tapOn: "Pilih bukti transfer"
+- assertVisible: "Ambil foto"
+- assertVisible: "Pilih dari galeri"
+# AKHIR FLOW — titik batas (lihat header).

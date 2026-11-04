@@ -1,0 +1,32 @@
+# Maestro flow — BDD-06 Pending kedaluwarsa (Deofoot 1.5.0, P11).
+# Pasangan 1-ke-1: features/bdd-06-pending-kedaluwarsa.feature
+#
+# PRASYARAT: instalasi fresh/belum login; akun uji sudah dibuat dan
+# memiliki booking pending yang MASIH SEGAR (< 30 menit).
+#
+# KEJUJURAN: flow ini TIDAK menunggu 30 menit real-time dan TIDAK
+# membuktikan kedaluwarsa. Yang dibuktikan hanya baseline: pending
+# segar tetap "Menunggu" (tidak kedaluwarsa prematur). Pembuktian
+# kedaluwarsa yang sesungguhnya butuh data uji bertimestamp
+# (> 30 menit) — tanpa itu, skenario tetap BELUM TERBUKTI.
+appId: com.deofoot.app
+---
+- launchApp
+- assertVisible: "Masuk"
+- tapOn: "Masuk"
+- tapOn: "Email"
+- inputText: "AKUN_UJI@deofoot.test"
+- hideKeyboard
+- tapOn: "Password"
+- inputText: "KATA_SANDI_AKUN_UJI"
+- hideKeyboard
+- tapOn:
+    point: "50%, 55%"
+- assertVisible: "Deofoot"
+- tapOn: "Booking Saya"
+- assertVisible: "Booking Saya"
+- assertVisible: "Akan datang"
+# Booking pending segar harus tetap "Menunggu", bukan "Kedaluwarsa".
+- assertVisible: "Menunggu"
+# AKHIR FLOW — baseline saja. Kedaluwarsa sesungguhnya butuh data
+# bertimestamp; lihat .feature dan laporan 06.

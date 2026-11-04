@@ -1,0 +1,35 @@
+# Maestro flow — BDD-02 Anti double-booking (Deofoot 1.5.0, P11).
+# Pasangan 1-ke-1: features/bdd-02-anti-double-booking.feature
+#
+# PRASYARAT: instalasi fresh/belum login; akun uji A (pelaksana)
+# dan akun uji B sudah dibuat; slot 10.00 hari ini pada lapangan
+# Futsal pertama SUDAH ditempati booking pending milik akun uji B.
+# Bila slot yang ditempati berbeda, sesuaikan jam di flow ini dan
+# catat perubahannya di laporan — jangan diam-diam.
+# Yang diuji: slot PERSIS SAMA, bukan slot bersebelahan.
+appId: com.deofoot.app
+---
+- launchApp
+- assertVisible: "Masuk"
+- tapOn: "Masuk"
+- tapOn: "Email"
+- inputText: "AKUN_UJI@deofoot.test"
+- hideKeyboard
+- tapOn: "Password"
+- inputText: "KATA_SANDI_AKUN_UJI"
+- hideKeyboard
+- tapOn:
+    point: "50%, 55%"
+- assertVisible: "Deofoot"
+- assertVisible: "Semua"
+- tapOn: "Futsal"
+- tapOn: "Rp120.000/jam"
+- assertVisible: "Tanggal main"
+# Slot 10.00 harus tampil "Menunggu" (booking pending akun uji B).
+- assertVisible: "Menunggu"
+# Mengetuk slot terisi TIDAK boleh menghasilkan seleksi.
+- tapOn: "10.00"
+- assertVisible: "Pilih slot bebas untuk melanjutkan"
+- assertNotVisible: "Lanjut"
+# Lolos = tidak ada booking ganda yang bisa dibuat dari UI untuk
+# slot yang persis sama.
