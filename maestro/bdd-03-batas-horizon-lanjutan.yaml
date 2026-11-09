@@ -1,0 +1,35 @@
+# Maestro flow — BDD-03 Batas horizon (Deofoot 1.5.0, P11).
+# Pasangan 1-ke-1: features/bdd-03-batas-horizon.feature
+#
+# PRASYARAT: instalasi fresh/belum login; akun uji sudah dibuat;
+# lapangan Futsal pertama ada.
+#
+# KEJUJURAN: Maestro tidak bisa menghitung H+89 saat jalan dan nomor
+# tanggal berulang tiap bulan, jadi flow ini HANYA mengantar ke
+# ujung kalender. Konfirmasi batas (tanggal terakhir = hari ini +
+# 89 hari; tidak ada tanggal sesudahnya) dilakukan pelaksana MANUAL
+# di perangkat dan dicatat di laporan. Flow saja TIDAK membuktikan
+# batas ini.
+appId: com.deofoot.app
+---
+- launchApp
+- tapOn: "Beranda"
+- assertVisible: "Deofoot"
+- assertVisible: "Semua"
+- tapOn: "Futsal"
+- tapOn:
+    point: "50%, 42%"
+- assertVisible: "Jadwal — Lapangan 1"
+- tapOn:
+    point: "50%, 17%"
+- assertVisible: "Pilih tanggal"
+# Gulir sampai ujung kalender (rentang 90 hari ≈ 3 bulan).
+- scroll
+- scroll
+- scroll
+- scroll
+- assertVisible: "Pilih tanggal"
+# TITIK PEMERIKSAAN MANUAL (di luar Maestro):
+# 1. Tanggal terakhir yang tampil harus = hari ini + 89 hari.
+# 2. Gulir lebih jauh tidak menampilkan tanggal sesudahnya.
+# Catat tanggal terakhir yang terlihat + tanggal jalan di laporan.

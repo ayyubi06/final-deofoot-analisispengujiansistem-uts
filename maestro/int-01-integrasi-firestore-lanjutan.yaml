@@ -1,0 +1,43 @@
+# Maestro flow — INT-01 Integrasi aplikasi-Firestore (Deofoot 1.5.0, P11).
+# Pasangan 1-ke-1: features/int-01-integrasi-firestore.feature
+#
+# Peran flow ini: menunjukkan jalur UI tempat booking dibuat
+# (sampai batas yang sama seperti BDD-01). PEMERIKSAAN DOKUMEN
+# FIRESTORE TIDAK BISA dilakukan Maestro dan TIDAK ada di flow ini.
+#
+# LANGKAH MANUAL SETELAH FLOW (baca-saja, tanpa mengubah data):
+# 1. Selesaikan satu booking secara manual di perangkat uji dengan
+#    akun uji (ujung manual BDD-01).
+# 2. Buka Firebase console / query baca-saja koleksi "bookings",
+#    filter userId = UID akun uji, urutkan dari terbaru.
+# 3. Cocokkan field dokumen dengan ringkasan UI: fieldId, fieldName,
+#    date (yyyy-MM-dd), startTime/endTime (HH:mm), status "pending",
+#    totalPrice, pricePerHour, userId, userEmail.
+# 4. Catat hasil + UID (bukan kredensial) di laporan 06.
+appId: com.deofoot.app
+---
+- launchApp
+- tapOn: "Beranda"
+- assertVisible: "Deofoot"
+- assertVisible: "Semua"
+- tapOn: "Futsal"
+- tapOn:
+    point: "50%, 42%"
+- assertVisible: "Jadwal — Lapangan 1"
+- tapOn: "16.00"
+- assertVisible: "1 jam · 16.00–17.00"
+- tapOn: "Lanjut"
+- assertVisible: "Booking Lapangan"
+- assertVisible: "Ringkasan booking"
+- tapOn: "Nomor WhatsApp aktif"
+- inputText: "081200000000"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: "Bukti transfer"
+    direction: DOWN
+- tapOn: "Pilih bukti transfer"
+- assertVisible: "Ambil foto"
+- assertVisible: "Pilih dari galeri"
+# AKHIR BAGIAN MAESTRO — pemeriksaan dokumen adalah langkah manual
+# (lihat header). Jangan klaim INT-01 lolos dari flow ini saja.

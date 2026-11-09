@@ -1,0 +1,43 @@
+# Maestro flow — INT-02 Unggah bukti (Deofoot 1.5.0, P11).
+# Pasangan 1-ke-1: features/int-02-unggah-bukti.feature
+#
+# BATAS KERAS: alur HANYA sampai layar unggah bukti tampil dan
+# lembar pilih terbuka. TANPA transfer uang sungguhan, TANPA nomor/
+# akun DANA asli, TANPA menekan Kirim Booking, TANPA membuka layar
+# admin "Verifikasi Pembayaran". Verifikasi admin oleh isAdmin
+# DI LUAR JANGKAUAN pengujian ini dan tidak diuji dengan akun asli.
+appId: com.deofoot.app
+---
+- launchApp
+- tapOn: "Beranda"
+- assertVisible: "Deofoot"
+- assertVisible: "Semua"
+- tapOn: "Futsal"
+- tapOn:
+    point: "50%, 42%"
+- assertVisible: "Jadwal — Lapangan 1"
+- tapOn: "16.00"
+- assertVisible: "1 jam · 16.00–17.00"
+- tapOn: "Lanjut"
+- assertVisible: "Booking Lapangan"
+- scrollUntilVisible:
+    element:
+      text: "Bukti transfer"
+    direction: DOWN
+- assertVisible: "Belum ada bukti transfer"
+- assertVisible: "Pilih bukti transfer"
+- scrollUntilVisible:
+    element:
+      text: "Nomor WhatsApp aktif"
+    direction: UP
+- tapOn: "Nomor WhatsApp aktif"
+- inputText: "081200000000"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: "Pilih bukti transfer dulu untuk mengaktifkan tombol."
+    direction: DOWN
+- tapOn: "Pilih bukti transfer"
+- assertVisible: "Ambil foto"
+- assertVisible: "Pilih dari galeri"
+# AKHIR FLOW — tanpa transfer, tanpa kirim, tanpa verifikasi admin.

@@ -1,0 +1,25 @@
+# Maestro flow — BDD-04 Pembatalan (Deofoot 1.5.0, P11).
+# Pasangan 1-ke-1: features/bdd-04-pembatalan.feature
+#
+# PRASYARAT: instalasi fresh/belum login; akun uji sudah dibuat dan
+# memiliki TEPAT SATU booking akan datang yang bisa dibatalkan
+# (BUKAN seri, mulai main > 2 jam lagi). Flow mengetuk tombol
+# "Batalkan" pertama; bila kartu pertama tidak bisa dibatalkan,
+# flow gagal dengan keras — perbaiki data uji, jangan ubah flow
+# diam-diam. Sisi negatif (≤ 2 jam) TIDAK ada di flow ini; ia
+# kondisional dan dicatat di laporan bila tidak bisa dibuat aman.
+appId: com.deofoot.app
+---
+- launchApp
+- tapOn: "Beranda"
+- assertVisible: "Deofoot"
+- tapOn: "Booking Saya"
+- assertVisible: "Booking Saya"
+- assertVisible: "Akan datang"
+- tapOn: "Batalkan"
+- assertVisible: "Batalkan booking?"
+- tapOn: "Ya, batalkan"
+- assertVisible: "Booking dibatalkan."
+# Kartu yang dibatalkan tidak lagi tampil di "Akan datang"
+# (verifikasi visual pelaksana; statusnya menjadi "Dibatalkan"
+# dan pindah ke "Riwayat" sesuai aturan isUpcoming).
