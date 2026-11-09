@@ -13,22 +13,24 @@ appId: com.deofoot.app
 - assertVisible: "Masuk"
 - tapOn: "Masuk"
 - tapOn: "Email"
-- inputText: "AKUN_UJI@deofoot.test"
+- inputText: "demo@deofoot.test"
 - hideKeyboard
 - tapOn: "Password"
-- inputText: "KATA_SANDI_AKUN_UJI"
+- inputText: "1234567890"
 - hideKeyboard
 - tapOn:
     point: "50%, 55%"
 - assertVisible: "Deofoot"
 - assertVisible: "Semua"
 - tapOn: "Futsal"
-- tapOn: "Rp120.000/jam"
-- assertVisible: "Tanggal main"
+- tapOn:
+    point: "50%, 42%"
+- assertVisible: "Jadwal — Lapangan 1"
 # Slot 10.00 harus tampil "Menunggu" (booking pending akun uji B).
 - assertVisible: "Menunggu"
 # Mengetuk slot terisi TIDAK boleh menghasilkan seleksi.
-- tapOn: "10.00"
+# Slot disesuaikan dari 10.00 mengikuti data tanam: booking pending akun lain di 21.00 (9 Nov).
+- tapOn: "21.00"
 - assertVisible: "Pilih slot bebas untuk melanjutkan"
 - assertNotVisible: "Lanjut"
 # Lolos = tidak ada booking ganda yang bisa dibuat dari UI untuk

@@ -12,29 +12,40 @@ appId: com.deofoot.app
 - assertVisible: "Masuk"
 - tapOn: "Masuk"
 - tapOn: "Email"
-- inputText: "AKUN_UJI@deofoot.test"
+- inputText: "demo@deofoot.test"
 - hideKeyboard
 - tapOn: "Password"
-- inputText: "KATA_SANDI_AKUN_UJI"
+- inputText: "1234567890"
 - hideKeyboard
 - tapOn:
     point: "50%, 55%"
 - assertVisible: "Deofoot"
 - assertVisible: "Semua"
 - tapOn: "Futsal"
-- tapOn: "Rp120.000/jam"
-- assertVisible: "Tanggal main"
-- tapOn: "10.00"
-- assertVisible: "1 jam · 10.00–11.00"
+- tapOn:
+    point: "50%, 42%"
+- assertVisible: "Jadwal — Lapangan 1"
+- tapOn: "16.00"
+- assertVisible: "1 jam · 16.00–17.00"
 - tapOn: "Lanjut"
 - assertVisible: "Booking Lapangan"
-- assertVisible: "Bukti transfer"
+- scrollUntilVisible:
+    element:
+      text: "Bukti transfer"
+    direction: DOWN
 - assertVisible: "Belum ada bukti transfer"
 - assertVisible: "Pilih bukti transfer"
+- scrollUntilVisible:
+    element:
+      text: "Nomor WhatsApp aktif"
+    direction: UP
 - tapOn: "Nomor WhatsApp aktif"
 - inputText: "081200000000"
 - hideKeyboard
-- assertVisible: "Pilih bukti transfer dulu untuk mengaktifkan tombol."
+- scrollUntilVisible:
+    element:
+      text: "Pilih bukti transfer dulu untuk mengaktifkan tombol."
+    direction: DOWN
 - tapOn: "Pilih bukti transfer"
 - assertVisible: "Ambil foto"
 - assertVisible: "Pilih dari galeri"

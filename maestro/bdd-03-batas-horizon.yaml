@@ -16,19 +16,21 @@ appId: com.deofoot.app
 - assertVisible: "Masuk"
 - tapOn: "Masuk"
 - tapOn: "Email"
-- inputText: "AKUN_UJI@deofoot.test"
+- inputText: "demo@deofoot.test"
 - hideKeyboard
 - tapOn: "Password"
-- inputText: "KATA_SANDI_AKUN_UJI"
+- inputText: "1234567890"
 - hideKeyboard
 - tapOn:
     point: "50%, 55%"
 - assertVisible: "Deofoot"
 - assertVisible: "Semua"
 - tapOn: "Futsal"
-- tapOn: "Rp120.000/jam"
-- assertVisible: "Tanggal main"
-- tapOn: "Tanggal main"
+- tapOn:
+    point: "50%, 42%"
+- assertVisible: "Jadwal — Lapangan 1"
+- tapOn:
+    point: "50%, 17%"
 - assertVisible: "Pilih tanggal"
 # Gulir sampai ujung kalender (rentang 90 hari ≈ 3 bulan).
 - scroll

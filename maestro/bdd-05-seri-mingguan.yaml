@@ -20,25 +20,29 @@ appId: com.deofoot.app
 - assertVisible: "Masuk"
 - tapOn: "Masuk"
 - tapOn: "Email"
-- inputText: "AKUN_UJI@deofoot.test"
+- inputText: "demo@deofoot.test"
 - hideKeyboard
 - tapOn: "Password"
-- inputText: "KATA_SANDI_AKUN_UJI"
+- inputText: "1234567890"
 - hideKeyboard
 - tapOn:
     point: "50%, 55%"
 - assertVisible: "Deofoot"
 - assertVisible: "Semua"
 - tapOn: "Futsal"
-- tapOn: "Rp120.000/jam"
-- assertVisible: "Tanggal main"
+- tapOn:
+    point: "50%, 42%"
+- assertVisible: "Jadwal — Lapangan 1"
 - tapOn: "Langganan rutin"
 - assertVisible: "Langganan Rutin"
 - assertVisible: "Atur seri mingguan"
 - assertVisible: "4×"
 - assertVisible: "Setiap"
 - assertVisible: "Periode"
-- assertVisible: "Kirim Langganan"
+- scrollUntilVisible:
+    element:
+      text: "Kirim Langganan"
+    direction: DOWN
 - tapOn: "Nomor WhatsApp aktif"
 - inputText: "081200000000"
 - hideKeyboard

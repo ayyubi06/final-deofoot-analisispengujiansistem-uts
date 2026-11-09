@@ -15,10 +15,10 @@ appId: com.deofoot.app
 - assertVisible: "Masuk"
 - tapOn: "Masuk"
 - tapOn: "Email"
-- inputText: "AKUN_UJI@deofoot.test"
+- inputText: "demo@deofoot.test"
 - hideKeyboard
 - tapOn: "Password"
-- inputText: "KATA_SANDI_AKUN_UJI"
+- inputText: "1234567890"
 - hideKeyboard
 - tapOn:
     point: "50%, 55%"
