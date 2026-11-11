@@ -1,6 +1,6 @@
-# 07 \u2014 Static Code Analysis (Pertemuan 13): Linter
+# 07 - Static Code Analysis (Pertemuan 13): Linter
 
-Deofoot 1.5.0 \u00b7 Repo: ayyubi06/final-deofoot-analisispengujiansistem-uts
+Deofoot 1.5.0 | Repo: ayyubi06/final-deofoot-analisispengujiansistem-uts
 Branch: `fitur/sonarqube-p13` (dari `main` 0b49e68)
 Tanggal jalan: 11 November 2026
 
