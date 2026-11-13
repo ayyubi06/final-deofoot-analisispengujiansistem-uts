@@ -9,10 +9,10 @@
 # KATA_SANDI_AKUN_UJI dengan kredensial akun uji sebelum jalan.
 # JANGAN memakai akun asli, akun admin, atau data pengguna asli.
 #
-# BATAS: flow berhenti pada lembar pilih bukti (titik terakhir yang
-# bisa diverifikasi di dalam aplikasi). Penyelesaian pengiriman +
-# verifikasi pending adalah langkah MANUAL (lihat .feature dan
-# laporan 06). Flow ini TIDAK menekan Kirim Booking.
+# BATAS (diperbarui 11 Nov 2026 atas keputusan pemilik): flow berlanjut
+# sampai booking TERKIRIM, memilih foto sampel dari galeri lalu menekan
+# Kirim Booking. Sesudah run, keberadaan booking pending diverifikasi
+# di server (cek-booking), bukan hanya dari layar.
 appId: com.deofoot.app
 ---
 - launchApp
@@ -32,8 +32,8 @@ appId: com.deofoot.app
 - tapOn:
     point: "50%, 42%"
 - assertVisible: "Jadwal — Lapangan 1"
-- tapOn: "17.00"
-- assertVisible: "1 jam · 17.00–18.00"
+- tapOn: "21.00"
+- assertVisible: "1 jam · 20.00–21.00"
 - tapOn: "Lanjut"
 - assertVisible: "Booking Lapangan"
 - assertVisible: "Ringkasan booking"
@@ -57,6 +57,19 @@ appId: com.deofoot.app
 - tapOn: "Pilih bukti transfer"
 - assertVisible: "Ambil foto"
 - assertVisible: "Pilih dari galeri"
-# AKHIR FLOW — titik batas (lihat header). Langkah manual berikutnya
-# ada di .feature dan laporan 06; jangan ditambahkan ke flow ini
-# tanpa mengubah status kejujuran di laporan.
+# DIPERPANJANG atas keputusan pemilik 11 Nov 2026: flow kini berlanjut
+# sampai booking terkirim. Hasil yang diharapkan di server: satu booking
+# pending akun demo untuk slot di atas pada hari berjalan. Langkah ekor
+# dari salinan kerja bdd-01-sampai-selesai-2.yaml, koordinat foto dikoreksi
+# ke 16%, 34% sesuai pemilih foto 11 Nov (satu foto, kiri atas, terverifikasi probe).
+- tapOn: "Pilih dari galeri"
+- waitForAnimationToEnd
+- tapOn:
+    point: "16%, 34%"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      text: "Kirim Booking"
+    direction: DOWN
+- tapOn: "Kirim Booking"
+- waitForAnimationToEnd
