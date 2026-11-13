@@ -2,9 +2,9 @@ name: SonarQube Cloud
 
 on:
   push:
-    branches: [fitur/sonarqube-p13]
+    branches: [fitur/sonarqube-p13, main]
   pull_request:
-    branches: [fitur/sonarqube-p13]
+    branches: [fitur/sonarqube-p13, main]
 
 jobs:
   sonarqube:
