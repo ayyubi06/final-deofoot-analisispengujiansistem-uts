@@ -14,14 +14,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # Flutter dikunci ke versi lokal 3.47.9 (Dart 3.13.7): analyze 0 isu,
+      # test 170/170 lulus. Channel stable di CI lebih baru dan menggagalkan
+      # run (29 info depresiasi material.dart, 9 test animasi gagal).
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: '3.47.9'
       - run: flutter pub get
-      # --no-fatal-infos: Flutter stable di CI lebih baru dari Flutter lokal,
-      # sehingga analyze melaporkan 29 info deprecated_member_use (material.dart
-      # usang sesudah v3.47.0-0.0.pre). Info tidak boleh menggagalkan gerbang;
+      # --no-fatal-infos: info tidak boleh menggagalkan gerbang;
       # error dan warning tetap fatal.
       - run: flutter analyze --no-fatal-infos
       - run: flutter test --coverage
