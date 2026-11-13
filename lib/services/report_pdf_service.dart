@@ -31,12 +31,12 @@ class ReportPdfService {
         margin: const pw.EdgeInsets.all(36),
         build: (ctx) => [
           pw.Text('Laporan Deofoot',
-              style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+              style: const pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 4),
           pw.Text('Periode: ${labelPeriodePdf(labelPeriode)}'),
           pw.Text('Dicetak: ${tanggalIndonesia(tanggalCetak)}'),
           pw.SizedBox(height: 16),
-          pw.Text('Ringkasan', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+          pw.Text('Ringkasan', style: const pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
           pw.TableHelper.fromTextArray(
             headers: const ['Jumlah booking (Disetujui)', 'Slot terisi', 'Total pendapatan'],
@@ -50,7 +50,7 @@ class ReportPdfService {
           ),
           pw.SizedBox(height: 10),
           pw.Text('Jumlah booking per status',
-              style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+              style: const pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 4),
           pw.TableHelper.fromTextArray(
             headers: const ['Disetujui', 'Menunggu', 'Ditolak', 'Dibatalkan', 'Kedaluwarsa'],
@@ -65,7 +65,7 @@ class ReportPdfService {
             ],
           ),
           pw.SizedBox(height: 16),
-          pw.Text('Per Lapangan', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+          pw.Text('Per Lapangan', style: const pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
           if (lap.perLapangan.isEmpty)
             pw.Text('Tidak ada booking Disetujui pada periode ini.')
@@ -83,7 +83,7 @@ class ReportPdfService {
               ],
             ),
           pw.SizedBox(height: 16),
-          pw.Text('Per Tanggal', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+          pw.Text('Per Tanggal', style: const pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
           if (tanggalUrut.isEmpty)
             pw.Text('Tidak ada data.')

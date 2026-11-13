@@ -18,16 +18,16 @@ jobs:
       # test 170/170 lulus. Channel stable di CI lebih baru dan menggagalkan
       # run (29 info depresiasi material.dart, 9 test animasi gagal).
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.47.9'
-      - run: flutter pub get
+      - run: flutter pub get --enforce-lockfile
       # --no-fatal-infos: info tidak boleh menggagalkan gerbang;
       # error dan warning tetap fatal.
       - run: flutter analyze --no-fatal-infos
       - run: flutter test --coverage
       - name: SonarQube scan
-        uses: SonarSource/sonarqube-scan-action@v6
+        uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io

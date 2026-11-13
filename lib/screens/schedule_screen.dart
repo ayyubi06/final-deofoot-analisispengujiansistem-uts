@@ -245,11 +245,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             ),
           ),
           // Legenda + keterangan grid (§3.3: "60 mnt" cukup di kepala).
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
+              children: [
                 _Legend(
                   color: DeofootTheme.card,
                   border: true,

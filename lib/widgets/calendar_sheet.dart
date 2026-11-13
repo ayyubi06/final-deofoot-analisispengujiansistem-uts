@@ -71,7 +71,7 @@ class CalendarSheet extends StatelessWidget {
                     child: Center(
                       child: Text(
                         w,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: DeofootTheme.ink60,
