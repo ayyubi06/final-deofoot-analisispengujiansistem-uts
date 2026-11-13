@@ -22,3 +22,9 @@ subprojects {
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
+
+// SonarQube (S8569): kunci dependensi proyek root agar versi antar build
+// dapat diprediksi; lockfile-nya (gradle.lockfile) ikut di-commit.
+dependencyLocking {
+    lockAllConfigurations()
+}
