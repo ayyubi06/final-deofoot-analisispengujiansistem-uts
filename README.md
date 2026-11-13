@@ -128,3 +128,9 @@ Pemisahan ini membuat aturan bisnis dapat diuji secara unit tanpa emulator maupu
 2. `flutter run` (perangkat Android / emulator, min. API 34 untuk pengujian kami)
 3. Masuk dengan akun terdaftar; fitur admin hanya muncul pada akun berpenanda `isAdmin`.
 
+
+## Static Code Analysis (SonarQube Cloud) (Pertemuan 13)
+
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=ayyubi06_final-deofoot-analisispengujiansistem-uts&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=ayyubi06_final-deofoot-analisispengujiansistem-uts)
+
+Analisis statis berjalan otomatis lewat GitHub Actions ([workflow SonarQube](.github/workflows/sonarqube.yml)) pada setiap push ke cabang `fitur/sonarqube-p13`. Hasilnya tampil di [dashboard SonarCloud](https://sonarcloud.io/project/overview?id=ayyubi06_final-deofoot-analisispengujiansistem-uts). Menjalankan ulang scan: push commit baru ke cabang tersebut atau jalankan ulang workflow dari tab Actions.
