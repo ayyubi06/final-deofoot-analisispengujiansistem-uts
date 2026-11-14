@@ -21,7 +21,10 @@ import 'schedule_screen.dart';
 /// berjenjang, dan Jadwal dibuka dengan slot hasil sudah
 /// terpraseleksi. Logika pencarian tidak berubah.)
 class SlotSearchScreen extends StatefulWidget {
-  const SlotSearchScreen({super.key});
+  final FirestoreService firestoreService;
+
+  SlotSearchScreen({super.key, FirestoreService? firestoreService})
+    : firestoreService = firestoreService ?? FirestoreService();
 
   @override
   State<SlotSearchScreen> createState() => _SlotSearchScreenState();
@@ -44,7 +47,7 @@ class _SlotSearchScreenState extends State<SlotSearchScreen> {
   }
 
   void _openCalendar(List<Field> fields) {
-    final fs = FirestoreService();
+    final fs = widget.firestoreService;
     final days = bookingDateRange(DateTime.now());
     showPitchSheet<void>(
       context,
@@ -65,10 +68,9 @@ class _SlotSearchScreenState extends State<SlotSearchScreen> {
               final aktif = fields.where((f) => f.isActive).toList();
               for (final d in days) {
                 final ds = fmtDate(d);
-                final todays = snap.data!
-                    .where((b) => b.date == ds)
-                    .toList();
-                final bebas = !isPastSlot(d, _jamMulai, now) &&
+                final todays = snap.data!.where((b) => b.date == ds).toList();
+                final bebas =
+                    !isPastSlot(d, _jamMulai, now) &&
                     lapanganBebas(
                       fields: aktif,
                       bookings: todays,
@@ -95,7 +97,7 @@ class _SlotSearchScreenState extends State<SlotSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final fs = FirestoreService();
+    final fs = widget.firestoreService;
     final dateStr = fmtDate(_selected);
     return Scaffold(
       appBar: AppBar(title: const Text('Cari Slot Kosong')),
@@ -111,7 +113,9 @@ class _SlotSearchScreenState extends State<SlotSearchScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                 child: PitchCard(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   onTap: () => _openCalendar(allFields),
                   child: Row(
                     children: [
@@ -136,10 +140,7 @@ class _SlotSearchScreenState extends State<SlotSearchScreen> {
                         ],
                       ),
                       const Spacer(),
-                      const Icon(
-                        Icons.expand_more,
-                        color: DeofootTheme.ink60,
-                      ),
+                      const Icon(Icons.expand_more, color: DeofootTheme.ink60),
                     ],
                   ),
                 ),
@@ -234,8 +235,7 @@ class _SlotSearchScreenState extends State<SlotSearchScreen> {
                     }
                     var fields = allFields;
                     if (_kat != 'Semua') {
-                      fields =
-                          fields.where((f) => f.category == _kat).toList();
+                      fields = fields.where((f) => f.category == _kat).toList();
                     }
                     // Slot yang sudah lewat (hari ini) tidak ditawarkan —
                     // konsisten dengan grid Jadwal.
@@ -275,7 +275,9 @@ class _SlotSearchScreenState extends State<SlotSearchScreen> {
                               index: i,
                               child: PitchCard(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 12),
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
                                 onTap: () => Navigator.of(context).push(
                                   MaterialPageRoute(
                                     builder: (_) => ScheduleScreen(
@@ -283,6 +285,7 @@ class _SlotSearchScreenState extends State<SlotSearchScreen> {
                                       initialDate: _selected,
                                       initialStartHour: _jamMulai,
                                       initialDuration: _durasi,
+                                      firestoreService: widget.firestoreService,
                                     ),
                                   ),
                                 ),
@@ -293,9 +296,10 @@ class _SlotSearchScreenState extends State<SlotSearchScreen> {
                                       child: Text(
                                         inisialNama(hasil[i].name),
                                         style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 13),
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                        ),
                                       ),
                                     ),
                                     const SizedBox(width: 12),
@@ -308,8 +312,8 @@ class _SlotSearchScreenState extends State<SlotSearchScreen> {
                                             hasil[i].name,
                                             style: DeofootTheme.bodyStyle
                                                 .copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            ),
+                                                  fontWeight: FontWeight.w700,
+                                                ),
                                           ),
                                           Text(
                                             '${hasil[i].category} • ${fmtRupiah(hasil[i].pricePerHour)}/jam',

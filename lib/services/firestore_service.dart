@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart' hide Field;
+
 import '../models.dart';
 import '../booking_logic.dart';
 import '../recurring_logic.dart';
@@ -8,12 +9,17 @@ import '../recurring_logic.dart';
 /// - users/{uid}: read/create milik sendiri
 /// - bookings: create milik sendiri; read milik sendiri atau admin
 class FirestoreService {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  FirestoreService({FirebaseFirestore? db})
+    : _db = db ?? FirebaseFirestore.instance;
+
+  final FirebaseFirestore _db;
 
   // --- Fields (read-only) ---
   Stream<List<Field>> watchFields() {
-    return _db.collection('fields').snapshots().map(
-        (s) => s.docs.map(Field.fromDoc).toList());
+    return _db
+        .collection('fields')
+        .snapshots()
+        .map((s) => s.docs.map(Field.fromDoc).toList());
   }
 
   // --- Admin: kelola lapangan (Fase C) ---
@@ -31,10 +37,7 @@ class FirestoreService {
 
   /// Nonaktifkan / aktifkan kembali lapangan (pengganti hapus permanen).
   Future<void> setFieldActive(String fieldId, bool active) async {
-    await _db
-        .collection('fields')
-        .doc(fieldId)
-        .update({'isActive': active});
+    await _db.collection('fields').doc(fieldId).update({'isActive': active});
   }
 
   // --- Config pembayaran (read-only, DANA dari Firestore bukan hardcode) ---
@@ -93,10 +96,10 @@ class FirestoreService {
         .where('userId', isEqualTo: uid)
         .snapshots()
         .map((s) {
-      final list = s.docs.map(Booking.fromDoc).toList();
-      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return list;
-    });
+          final list = s.docs.map(Booking.fromDoc).toList();
+          list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return list;
+        });
   }
 
   /// Booking pending (untuk admin verifikasi).
@@ -106,10 +109,10 @@ class FirestoreService {
         .where('status', isEqualTo: 'pending')
         .snapshots()
         .map((s) {
-      final list = s.docs.map(Booking.fromDoc).toList();
-      list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-      return list;
-    });
+          final list = s.docs.map(Booking.fromDoc).toList();
+          list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+          return list;
+        });
   }
 
   /// Semua booking dalam rentang tanggal main inklusif (yyyy-MM-dd),
@@ -151,10 +154,8 @@ class FirestoreService {
   }) async {
     final startMin = startHour * 60;
     final endMin = endHour * 60;
-    final startTime =
-        '${startHour.toString().padLeft(2, '0')}:00';
-    final endTime =
-        '${endHour.toString().padLeft(2, '0')}:00';
+    final startTime = '${startHour.toString().padLeft(2, '0')}:00';
+    final endTime = '${endHour.toString().padLeft(2, '0')}:00';
 
     final col = _db.collection('bookings');
     final q = col
@@ -168,7 +169,8 @@ class FirestoreService {
       final existing = snap.docs.map(Booking.fromDoc).toList();
       if (hasConflict(existing, fieldId, date, startMin, endMin)) {
         throw BookingConflictException(
-            'Slot sudah dibooking orang lain. Silakan pilih jam lain.');
+          'Slot sudah dibooking orang lain. Silakan pilih jam lain.',
+        );
       }
       final ref = col.doc();
       tx.set(ref, {
@@ -223,9 +225,7 @@ class FirestoreService {
     if (status != 'confirmed' && status != 'rejected') {
       throw ArgumentError('Status booking tidak valid: $status');
     }
-    await _db.collection('bookings').doc(bookingId).update({
-      'status': status,
-    });
+    await _db.collection('bookings').doc(bookingId).update({'status': status});
   }
 
   // --- Langganan rutin / seri (Fase E) ---
@@ -237,10 +237,10 @@ class FirestoreService {
         .where('userId', isEqualTo: uid)
         .snapshots()
         .map((s) {
-      final list = s.docs.map(SubscriptionSeries.fromDoc).toList();
-      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return list;
-    });
+          final list = s.docs.map(SubscriptionSeries.fromDoc).toList();
+          list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return list;
+        });
   }
 
   /// Seri pending (untuk admin verifikasi per seri).
@@ -250,10 +250,10 @@ class FirestoreService {
         .where('status', isEqualTo: 'pending')
         .snapshots()
         .map((s) {
-      final list = s.docs.map(SubscriptionSeries.fromDoc).toList();
-      list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-      return list;
-    });
+          final list = s.docs.map(SubscriptionSeries.fromDoc).toList();
+          list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+          return list;
+        });
   }
 
   /// Semua booking pertemuan milik satu seri — untuk rincian seri
@@ -286,8 +286,7 @@ class FirestoreService {
     final endMin = endHour * 60;
     final startTime = '${startHour.toString().padLeft(2, '0')}:00';
     final endTime = '${endHour.toString().padLeft(2, '0')}:00';
-    final totalPerMeeting =
-        bookingTotal(endHour - startHour, pricePerHour);
+    final totalPerMeeting = bookingTotal(endHour - startHour, pricePerHour);
     final colBookings = _db.collection('bookings');
     final colSeries = _db.collection('subscriptions');
     return _db.runTransaction((tx) async {

@@ -18,12 +18,20 @@ const appVersionLabel = '1.5.0+7';
 /// Layar 7 — Profil: email, keluar, menu Verifikasi (admin).
 /// (Fase G §3.9: kartu Pitch, versi aplikasi tampil di bawah.)
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key});
+  final AuthService authService;
+  final FirestoreService firestoreService;
+
+  ProfileScreen({
+    super.key,
+    AuthService? authService,
+    FirestoreService? firestoreService,
+  }) : authService = authService ?? AuthService(),
+       firestoreService = firestoreService ?? FirestoreService();
 
   @override
   Widget build(BuildContext context) {
-    final auth = AuthService();
-    final fs = FirestoreService();
+    final auth = authService;
+    final fs = firestoreService;
     final user = auth.currentUser!;
     return Scaffold(
       appBar: AppBar(title: const Text('Profil')),
@@ -36,8 +44,7 @@ class ProfileScreen extends StatelessWidget {
                 const CircleAvatar(
                   radius: 28,
                   backgroundColor: DeofootTheme.pitch700,
-                  child: Icon(Icons.person,
-                      color: Colors.white, size: 32),
+                  child: Icon(Icons.person, color: Colors.white, size: 32),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -59,7 +66,8 @@ class ProfileScreen extends StatelessWidget {
                           return Text(
                             admin ? 'Admin' : 'Pengguna',
                             style: const TextStyle(
-                                color: DeofootTheme.textMuted),
+                              color: DeofootTheme.textMuted,
+                            ),
                           );
                         },
                       ),
@@ -84,7 +92,7 @@ class ProfileScreen extends StatelessWidget {
                     icon: Icons.verified_outlined,
                     title: 'Verifikasi Pembayaran',
                     subtitle: 'Setujui / tolak booking menunggu',
-                    screen: const VerifyScreen(),
+                    screen: VerifyScreen(firestoreService: firestoreService),
                   ),
                   const SizedBox(height: 12),
                   _menuCard(
@@ -92,16 +100,17 @@ class ProfileScreen extends StatelessWidget {
                     icon: Icons.stadium_outlined,
                     title: 'Kelola Lapangan',
                     subtitle: 'Tambah / ubah / nonaktifkan lapangan',
-                    screen: const FieldAdminScreen(),
+                    screen: FieldAdminScreen(
+                      firestoreService: firestoreService,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   _menuCard(
                     context,
                     icon: Icons.bar_chart_outlined,
                     title: 'Laporan',
-                    subtitle:
-                        'Pendapatan dari booking Disetujui + export PDF',
-                    screen: const ReportScreen(),
+                    subtitle: 'Pendapatan dari booking Disetujui + export PDF',
+                    screen: ReportScreen(firestoreService: firestoreService),
                   ),
                 ],
               );
@@ -111,10 +120,11 @@ class ProfileScreen extends StatelessWidget {
           PitchCard(
             padding: EdgeInsets.zero,
             child: ListTile(
-              leading: const Icon(Icons.logout,
-                  color: DeofootTheme.danger),
-              title: const Text('Keluar',
-                  style: TextStyle(color: DeofootTheme.danger)),
+              leading: const Icon(Icons.logout, color: DeofootTheme.danger),
+              title: const Text(
+                'Keluar',
+                style: TextStyle(color: DeofootTheme.danger),
+              ),
               onTap: () async {
                 await auth.signOut();
                 // Navigasi eksplisit ke AuthGate (-> Splash), karena
@@ -152,11 +162,10 @@ class ProfileScreen extends StatelessWidget {
         leading: Icon(icon, color: DeofootTheme.pitch700),
         title: Text(title),
         subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right,
-            color: DeofootTheme.ink60),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => screen),
-        ),
+        trailing: const Icon(Icons.chevron_right, color: DeofootTheme.ink60),
+        onTap: () =>
+            Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => screen)),
       ),
     );
   }

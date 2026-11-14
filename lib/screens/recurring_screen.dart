@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -34,13 +35,22 @@ class RecurringScreen extends StatefulWidget {
   final DateTime? initialDate;
   final int? initialStartHour;
   final int? initialDuration;
-  const RecurringScreen({
+  final FirestoreService firestoreService;
+  final AuthService authService;
+  final NotificationService notificationService;
+
+  RecurringScreen({
     super.key,
     required this.field,
     this.initialDate,
     this.initialStartHour,
     this.initialDuration,
-  });
+    FirestoreService? firestoreService,
+    AuthService? authService,
+    NotificationService? notificationService,
+  }) : firestoreService = firestoreService ?? FirestoreService(),
+       authService = authService ?? AuthService(),
+       notificationService = notificationService ?? NotificationService();
 
   @override
   State<RecurringScreen> createState() => _RecurringScreenState();
@@ -48,8 +58,8 @@ class RecurringScreen extends StatefulWidget {
 
 class _RecurringScreenState extends State<RecurringScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _fs = FirestoreService();
-  final _auth = AuthService();
+  FirestoreService get _fs => widget.firestoreService;
+  AuthService get _auth => widget.authService;
   final _picker = ImagePicker();
   final _waCtrl = TextEditingController();
 
@@ -67,17 +77,18 @@ class _RecurringScreenState extends State<RecurringScreen> {
   DateTime get _startDate => tanggalPertamaUntukHari(_weekday, DateTime.now());
   List<String> get _dates => ekspansiTanggalSeri(_startDate, _meetings);
   int get _total => totalHargaSeri(
-        jumlahPertemuan: _meetings,
-        durasiJam: _durasi,
-        pricePerHour: widget.field.pricePerHour,
-      );
+    jumlahPertemuan: _meetings,
+    durasiJam: _durasi,
+    pricePerHour: widget.field.pricePerHour,
+  );
 
   @override
   void initState() {
     super.initState();
     // Hari awal: dari tanggal konteks Jadwal bila ada; selain itu
     // hari besok (agar pertemuan pertama = besok, sesuai bawaan E2).
-    _weekday = widget.initialDate?.weekday ??
+    _weekday =
+        widget.initialDate?.weekday ??
         DateTime.now().add(const Duration(days: 1)).weekday;
     _startHour = widget.initialStartHour ?? openHour;
     if (_startHour < openHour || _startHour >= closeHour) {
@@ -167,8 +178,8 @@ class _RecurringScreenState extends State<RecurringScreen> {
       );
       // Izin notifikasi diminta sesudah booking (pertama) dibuat —
       // spek A4 (rework T2); lalu rekonsiliasi pengingat seri (A/E9).
-      await NotificationService().mintaIzin();
-      NotificationService().rekonsiliasiUntukUser(u.uid);
+      await widget.notificationService.mintaIzin();
+      widget.notificationService.rekonsiliasiUntukUser(u.uid);
       if (!mounted) return;
       Navigator.of(context).popUntil((r) => r.isFirst);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -202,8 +213,9 @@ class _RecurringScreenState extends State<RecurringScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content:
-                Text('Gagal mengirim langganan. Periksa koneksi lalu coba lagi.'),
+            content: Text(
+              'Gagal mengirim langganan. Periksa koneksi lalu coba lagi.',
+            ),
             backgroundColor: DeofootTheme.danger,
           ),
         );
@@ -254,9 +266,10 @@ class _RecurringScreenState extends State<RecurringScreen> {
                         children: [
                           _row('Lapangan', f.name),
                           const SizedBox(height: 8),
-                          const Text('Hari',
-                              style:
-                                  TextStyle(color: DeofootTheme.textMuted)),
+                          const Text(
+                            'Hari',
+                            style: TextStyle(color: DeofootTheme.textMuted),
+                          ),
                           const SizedBox(height: 6),
                           Wrap(
                             spacing: 6,
@@ -267,20 +280,22 @@ class _RecurringScreenState extends State<RecurringScreen> {
                                   // 1 Jan 2024 = Senin (acuan nama hari).
                                   label: namaHari(DateTime(2024, 1, wd)),
                                   selected: _weekday == wd,
-                                  onTap: () =>
-                                      setState(() => _weekday = wd),
+                                  onTap: () => setState(() => _weekday = wd),
                                 ),
                             ],
                           ),
                           const SizedBox(height: 8),
-                          _row('Pertemuan pertama',
-                              tanggalIndonesia(_startDate)),
+                          _row(
+                            'Pertemuan pertama',
+                            tanggalIndonesia(_startDate),
+                          ),
                           const SizedBox(height: 8),
                           Row(
                             children: [
-                              const Text('Jam mulai',
-                                  style: TextStyle(
-                                      color: DeofootTheme.textMuted)),
+                              const Text(
+                                'Jam mulai',
+                                style: TextStyle(color: DeofootTheme.textMuted),
+                              ),
                               const Spacer(),
                               DropdownButton<int>(
                                 value: _startHour,
@@ -302,30 +317,35 @@ class _RecurringScreenState extends State<RecurringScreen> {
                                 }),
                               ),
                               const SizedBox(width: 16),
-                              const Text('Durasi',
-                                  style: TextStyle(
-                                      color: DeofootTheme.textMuted)),
+                              const Text(
+                                'Durasi',
+                                style: TextStyle(color: DeofootTheme.textMuted),
+                              ),
                               const SizedBox(width: 8),
                               DropdownButton<int>(
                                 value: _durasi,
                                 items: [
-                                  for (var d = 1;
-                                      d <= closeHour - _startHour && d <= 4;
-                                      d++)
+                                  for (
+                                    var d = 1;
+                                    d <= closeHour - _startHour && d <= 4;
+                                    d++
+                                  )
                                     DropdownMenuItem(
-                                        value: d, child: Text('$d jam')),
+                                      value: d,
+                                      child: Text('$d jam'),
+                                    ),
                                 ],
-                                onChanged: (v) =>
-                                    setState(() => _durasi = v!),
+                                onChanged: (v) => setState(() => _durasi = v!),
                               ),
                             ],
                           ),
                           const SizedBox(height: 8),
                           Row(
                             children: [
-                              const Text('Pertemuan',
-                                  style: TextStyle(
-                                      color: DeofootTheme.textMuted)),
+                              const Text(
+                                'Pertemuan',
+                                style: TextStyle(color: DeofootTheme.textMuted),
+                              ),
                               const Spacer(),
                               for (final n in [4, 8, 12])
                                 Padding(
@@ -333,28 +353,29 @@ class _RecurringScreenState extends State<RecurringScreen> {
                                   child: PitchChip(
                                     label: '$n×',
                                     selected: _meetings == n,
-                                    onTap: () =>
-                                        setState(() => _meetings = n),
+                                    onTap: () => setState(() => _meetings = n),
                                   ),
                                 ),
                             ],
                           ),
                           const Divider(),
-                          _row('Setiap',
-                              '${namaHari(_startDate)} ${hourLabel(_startHour)}–${hourLabel(_startHour + _durasi)}'),
-                          _row('Periode',
-                              '${_dates.first} s/d ${_dates.last}'),
+                          _row(
+                            'Setiap',
+                            '${namaHari(_startDate)} ${hourLabel(_startHour)}–${hourLabel(_startHour + _durasi)}',
+                          ),
+                          _row('Periode', '${_dates.first} s/d ${_dates.last}'),
                           // Total berjalan dengan number ticker (§3.7).
                           Padding(
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 4),
+                            padding: const EdgeInsets.symmetric(vertical: 4),
                             child: Row(
-                              mainAxisAlignment:
-                                  MainAxisAlignment.spaceBetween,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('Total ($_meetings pertemuan)',
-                                    style: const TextStyle(
-                                        color: DeofootTheme.textMuted)),
+                                Text(
+                                  'Total ($_meetings pertemuan)',
+                                  style: const TextStyle(
+                                    color: DeofootTheme.textMuted,
+                                  ),
+                                ),
                                 NumberTicker(
                                   value: _total,
                                   format: fmtRupiah,
@@ -403,14 +424,18 @@ class _RecurringScreenState extends State<RecurringScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    _stepTitle('3', 'Pembayaran (satu kali untuk seluruh seri)'),
+                    _stepTitle(
+                      '3',
+                      'Pembayaran (satu kali untuk seluruh seri)',
+                    ),
                     PitchCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Tujuan (DANA):',
-                              style: TextStyle(
-                                  color: DeofootTheme.textMuted)),
+                          const Text(
+                            'Tujuan (DANA):',
+                            style: TextStyle(color: DeofootTheme.textMuted),
+                          ),
                           const SizedBox(height: 4),
                           Text(
                             'Nomor DANA: $danaNumber',
@@ -418,17 +443,22 @@ class _RecurringScreenState extends State<RecurringScreen> {
                               DeofootTheme.titleStyle,
                             ),
                           ),
-                          Text('a.n. $danaName',
-                              style: const TextStyle(
-                                  color: DeofootTheme.textMuted)),
+                          Text(
+                            'a.n. $danaName',
+                            style: const TextStyle(
+                              color: DeofootTheme.textMuted,
+                            ),
+                          ),
                           const SizedBox(height: 12),
                           OutlinedButton.icon(
                             onPressed: () {
                               Clipboard.setData(
-                                  ClipboardData(text: danaNumber));
+                                ClipboardData(text: danaNumber),
+                              );
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                    content: Text('Nomor DANA disalin.')),
+                                  content: Text('Nomor DANA disalin.'),
+                                ),
                               );
                             },
                             icon: const Icon(Icons.copy_outlined),
@@ -437,7 +467,8 @@ class _RecurringScreenState extends State<RecurringScreen> {
                               foregroundColor: DeofootTheme.pitch700,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(
-                                    DeofootTheme.radiusButton),
+                                  DeofootTheme.radiusButton,
+                                ),
                               ),
                             ),
                           ),
@@ -452,7 +483,8 @@ class _RecurringScreenState extends State<RecurringScreen> {
                           if (_proof != null)
                             ClipRRect(
                               borderRadius: BorderRadius.circular(
-                                  DeofootTheme.radiusCard),
+                                DeofootTheme.radiusCard,
+                              ),
                               child: Image.file(
                                 File(_proof!.path),
                                 height: 200,
@@ -466,13 +498,15 @@ class _RecurringScreenState extends State<RecurringScreen> {
                               decoration: BoxDecoration(
                                 color: DeofootTheme.surfacePitch,
                                 borderRadius: BorderRadius.circular(
-                                    DeofootTheme.radiusCard),
+                                  DeofootTheme.radiusCard,
+                                ),
                               ),
                               child: const Center(
                                 child: Text(
                                   'Belum ada bukti transfer',
                                   style: TextStyle(
-                                      color: DeofootTheme.textMuted),
+                                    color: DeofootTheme.textMuted,
+                                  ),
                                 ),
                               ),
                             ),
@@ -480,14 +514,17 @@ class _RecurringScreenState extends State<RecurringScreen> {
                           OutlinedButton.icon(
                             onPressed: _pickSheet,
                             icon: const Icon(Icons.upload_outlined),
-                            label: Text(_proof == null
-                                ? 'Pilih bukti transfer'
-                                : 'Ganti bukti transfer'),
+                            label: Text(
+                              _proof == null
+                                  ? 'Pilih bukti transfer'
+                                  : 'Ganti bukti transfer',
+                            ),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: DeofootTheme.pitch700,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(
-                                    DeofootTheme.radiusButton),
+                                  DeofootTheme.radiusButton,
+                                ),
                               ),
                             ),
                           ),
@@ -508,8 +545,7 @@ class _RecurringScreenState extends State<RecurringScreen> {
                     ],
                     PitchButton(
                       label: _sending ? 'Mengirim…' : 'Kirim Langganan',
-                      onPressed:
-                          (_proof == null || _sending) ? null : _send,
+                      onPressed: (_proof == null || _sending) ? null : _send,
                     ),
                     if (_proof == null)
                       const Padding(
@@ -518,8 +554,9 @@ class _RecurringScreenState extends State<RecurringScreen> {
                           'Pilih bukti transfer dulu untuk mengaktifkan tombol.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                              fontSize: 12,
-                              color: DeofootTheme.textMuted),
+                            fontSize: 12,
+                            color: DeofootTheme.textMuted,
+                          ),
                         ),
                       ),
                   ],
@@ -533,45 +570,49 @@ class _RecurringScreenState extends State<RecurringScreen> {
   }
 
   Widget _stepTitle(String n, String t) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 14,
-              backgroundColor: DeofootTheme.pitch700,
-              child: Text(n,
-                  style: const TextStyle(
-                      color: Colors.white, fontSize: 12)),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                t,
-                style: DeofootTheme.bodyStyle.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: DeofootTheme.pitch900,
-                ),
-              ),
-            ),
-          ],
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(
+      children: [
+        CircleAvatar(
+          radius: 14,
+          backgroundColor: DeofootTheme.pitch700,
+          child: Text(
+            n,
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+          ),
         ),
-      );
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            t,
+            style: DeofootTheme.bodyStyle.copyWith(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: DeofootTheme.pitch900,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _row(String k, String v, {bool bold = false}) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(k, style: const TextStyle(color: DeofootTheme.textMuted)),
-            Flexible(
-              child: Text(v,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                      fontWeight: bold ? FontWeight.bold : FontWeight.w600,
-                      color: DeofootTheme.pitch900)),
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(k, style: const TextStyle(color: DeofootTheme.textMuted)),
+        Flexible(
+          child: Text(
+            v,
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontWeight: bold ? FontWeight.bold : FontWeight.w600,
+              color: DeofootTheme.pitch900,
             ),
-          ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }

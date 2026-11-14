@@ -15,7 +15,10 @@ import '../widgets/pitch_components.dart';
 /// (Fase G §3.8: kartu Pitch, chip rentang Pitch, angka ringkasan
 /// number ticker dari 0 ±600 ms. Agregasi tidak berubah.)
 class ReportScreen extends StatefulWidget {
-  const ReportScreen({super.key});
+  final FirestoreService firestoreService;
+
+  ReportScreen({super.key, FirestoreService? firestoreService})
+    : firestoreService = firestoreService ?? FirestoreService();
 
   @override
   State<ReportScreen> createState() => _ReportScreenState();
@@ -89,7 +92,7 @@ class _ReportScreenState extends State<ReportScreen> {
   @override
   Widget build(BuildContext context) {
     final (mulai, akhir) = _rentang;
-    final fs = FirestoreService();
+    final fs = widget.firestoreService;
     return Scaffold(
       appBar: AppBar(title: const Text('Laporan')),
       body: StreamBuilder<List<Booking>>(
@@ -119,14 +122,17 @@ class _ReportScreenState extends State<ReportScreen> {
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () => _pilihTanggal(true),
-                        icon: const Icon(Icons.calendar_today_outlined,
-                            size: 18),
+                        icon: const Icon(
+                          Icons.calendar_today_outlined,
+                          size: 18,
+                        ),
                         label: Text('Dari: ${fmtDate(mulai)}'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: DeofootTheme.pitch700,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(
-                                DeofootTheme.radiusButton),
+                              DeofootTheme.radiusButton,
+                            ),
                           ),
                         ),
                       ),
@@ -135,14 +141,17 @@ class _ReportScreenState extends State<ReportScreen> {
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () => _pilihTanggal(false),
-                        icon: const Icon(Icons.calendar_today_outlined,
-                            size: 18),
+                        icon: const Icon(
+                          Icons.calendar_today_outlined,
+                          size: 18,
+                        ),
                         label: Text('Sampai: ${fmtDate(akhir)}'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: DeofootTheme.pitch700,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(
-                                DeofootTheme.radiusButton),
+                              DeofootTheme.radiusButton,
+                            ),
                           ),
                         ),
                       ),
@@ -162,8 +171,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 // Ringkasan — angka menghitung dari 0 (§3.8).
                 Row(
                   children: [
-                    _stat('Booking\nDisetujui', lap.jumlahBooking,
-                        (v) => '$v'),
+                    _stat('Booking\nDisetujui', lap.jumlahBooking, (v) => '$v'),
                     const SizedBox(width: 8),
                     _stat('Slot\nterisi', lap.slotTerisi, (v) => '$v jam'),
                     const SizedBox(width: 8),
@@ -172,8 +180,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 ),
                 const Text(
                   'Pendapatan hanya dari booking Disetujui.',
-                  style:
-                      TextStyle(fontSize: 12, color: DeofootTheme.textMuted),
+                  style: TextStyle(fontSize: 12, color: DeofootTheme.textMuted),
                 ),
                 const SizedBox(height: 12),
                 // Jumlah booking per status (spek B3).
@@ -203,7 +210,8 @@ class _ReportScreenState extends State<ReportScreen> {
                           radius: 6,
                         ),
                         label: Text(
-                            '${DeofootTheme.statusLabel(s)}: ${lap.jumlahPerStatus[s] ?? 0}'),
+                          '${DeofootTheme.statusLabel(s)}: ${lap.jumlahPerStatus[s] ?? 0}',
+                        ),
                         backgroundColor: DeofootTheme.surfacePitch,
                         side: BorderSide.none,
                         shape: const StadiumBorder(),
@@ -221,32 +229,37 @@ class _ReportScreenState extends State<ReportScreen> {
                 ),
                 const SizedBox(height: 8),
                 if (lap.perLapangan.isEmpty)
-                  const Text('Tidak ada booking Disetujui pada periode ini.',
-                      style: TextStyle(color: DeofootTheme.textMuted))
+                  const Text(
+                    'Tidak ada booking Disetujui pada periode ini.',
+                    style: TextStyle(color: DeofootTheme.textMuted),
+                  )
                 else
                   for (final a in lap.perLapangan)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: PitchCard(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         child: Row(
                           children: [
                             Expanded(
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(a.fieldName,
-                                      style: DeofootTheme.bodyStyle
-                                          .copyWith(
-                                              fontWeight:
-                                                  FontWeight.w700)),
+                                  Text(
+                                    a.fieldName,
+                                    style: DeofootTheme.bodyStyle.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                                   Text(
                                     '${a.jumlahBooking} booking • Okupansi '
                                     '${a.okupansiPersen.toStringAsFixed(1)}%',
-                                    style: DeofootTheme.captionStyle
-                                        .copyWith(fontSize: 13),
+                                    style: DeofootTheme.captionStyle.copyWith(
+                                      fontSize: 13,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -255,7 +268,8 @@ class _ReportScreenState extends State<ReportScreen> {
                               fmtRupiah(a.pendapatan),
                               style: DeofootTheme.tabular(
                                 DeofootTheme.bodyStyle.copyWith(
-                                    fontWeight: FontWeight.w600),
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ],
@@ -273,32 +287,36 @@ class _ReportScreenState extends State<ReportScreen> {
                 ),
                 const SizedBox(height: 8),
                 if (tanggalUrut.isEmpty)
-                  const Text('Tidak ada data.',
-                      style: TextStyle(color: DeofootTheme.textMuted))
+                  const Text(
+                    'Tidak ada data.',
+                    style: TextStyle(color: DeofootTheme.textMuted),
+                  )
                 else
                   for (final t in tanggalUrut)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: PitchCard(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         child: Row(
                           children: [
                             Expanded(
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     tanggalIndonesia(DateTime.parse(t)),
-                                    style: DeofootTheme.bodyStyle
-                                        .copyWith(
-                                            fontWeight: FontWeight.w700),
+                                    style: DeofootTheme.bodyStyle.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                   Text(
                                     '${lap.bookingPerTanggal[t] ?? 0} booking',
-                                    style: DeofootTheme.captionStyle
-                                        .copyWith(fontSize: 13),
+                                    style: DeofootTheme.captionStyle.copyWith(
+                                      fontSize: 13,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -307,7 +325,8 @@ class _ReportScreenState extends State<ReportScreen> {
                               fmtRupiah(lap.pendapatanPerTanggal[t] ?? 0),
                               style: DeofootTheme.tabular(
                                 DeofootTheme.bodyStyle.copyWith(
-                                    fontWeight: FontWeight.w600),
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ],
@@ -338,8 +357,7 @@ class _ReportScreenState extends State<ReportScreen> {
   Widget _stat(String label, int value, String Function(int) format) =>
       Expanded(
         child: PitchCard(
-          padding:
-              const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
           child: Column(
             children: [
               NumberTicker(
@@ -356,10 +374,14 @@ class _ReportScreenState extends State<ReportScreen> {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(label,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 11, color: DeofootTheme.textMuted)),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: DeofootTheme.textMuted,
+                ),
+              ),
             ],
           ),
         ),

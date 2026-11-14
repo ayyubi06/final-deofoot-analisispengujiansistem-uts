@@ -50,25 +50,26 @@ class UserSeriesScreen extends StatelessWidget {
               Row(
                 children: [
                   Flexible(
-                    child: Text(
-                      fieldName,
-                      style: DeofootTheme.titleStyle,
-                    ),
+                    child: Text(fieldName, style: DeofootTheme.titleStyle),
                   ),
                   const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
-                      color:
-                          DeofootTheme.volt.withValues(alpha: 0.35),
+                      color: DeofootTheme.volt.withValues(alpha: 0.35),
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.repeat,
-                            size: 12, color: DeofootTheme.pitch700),
+                        const Icon(
+                          Icons.repeat,
+                          size: 12,
+                          color: DeofootTheme.pitch700,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           'Langganan',
@@ -91,21 +92,23 @@ class UserSeriesScreen extends StatelessWidget {
               if (meetings.isEmpty)
                 Text(
                   'Belum ada pertemuan.',
-                  style: DeofootTheme.bodyStyle
-                      .copyWith(color: DeofootTheme.ink60),
+                  style: DeofootTheme.bodyStyle.copyWith(
+                    color: DeofootTheme.ink60,
+                  ),
                 ),
               for (final b in meetings)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: PitchCard(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     child: Row(
                       children: [
                         Expanded(
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 indoFullDate(DateTime.parse(b.date)),
@@ -115,8 +118,9 @@ class UserSeriesScreen extends StatelessWidget {
                               ),
                               Text(
                                 '${b.startTime}–${b.endTime} • ${fmtRupiah(b.totalPrice)}',
-                                style: DeofootTheme.captionStyle
-                                    .copyWith(fontSize: 13),
+                                style: DeofootTheme.captionStyle.copyWith(
+                                  fontSize: 13,
+                                ),
                               ),
                             ],
                           ),

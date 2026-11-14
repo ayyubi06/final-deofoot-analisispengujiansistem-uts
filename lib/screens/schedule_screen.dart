@@ -35,13 +35,16 @@ class ScheduleScreen extends StatefulWidget {
   /// seperti biasa.
   final int? initialStartHour;
   final int? initialDuration;
-  const ScheduleScreen({
+  final FirestoreService firestoreService;
+
+  ScheduleScreen({
     super.key,
     required this.field,
     this.initialDate,
     this.initialStartHour,
     this.initialDuration,
-  });
+    FirestoreService? firestoreService,
+  }) : firestoreService = firestoreService ?? FirestoreService();
 
   @override
   State<ScheduleScreen> createState() => _ScheduleScreenState();
@@ -58,6 +61,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   /// Pra-seleksi Cari Slot hanya dicoba satu kali.
   bool _preselectDone = false;
+  FirestoreService get _fs => widget.firestoreService;
 
   @override
   void initState() {
@@ -69,13 +73,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       _selected = now;
     } else {
       final d = DateTime(awal.year, awal.month, awal.day);
-      _selected = (d.isBefore(today) ||
-              d.isAfter(today.add(const Duration(days: 89))))
+      _selected =
+          (d.isBefore(today) || d.isAfter(today.add(const Duration(days: 89))))
           ? today
           : d;
     }
     // Expire booking pending basi (>30 mnt) - fire and forget.
-    FirestoreService().expireStalePendings().then((_) {}, onError: (_) {});
+    _fs.expireStalePendings().then((_) {}, onError: (_) {});
   }
 
   /// Tap slot: toggle pilih/batal via aturan [toggleSlot].
@@ -90,7 +94,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   void _openCalendar() {
-    final fs = FirestoreService();
+    final fs = _fs;
     final days = bookingDateRange(DateTime.now());
     showPitchSheet<void>(
       context,
@@ -106,8 +110,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             final marks = <String, DayMark>{};
             if (snap.hasData) {
               for (final d in days) {
-                marks[fmtDate(d)] =
-                    dayMark(snap.data!, widget.field.id, d, now);
+                marks[fmtDate(d)] = dayMark(
+                  snap.data!,
+                  widget.field.id,
+                  d,
+                  now,
+                );
               }
             }
             return CalendarSheet(
@@ -127,10 +135,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
   }
 
-  static bool _sameStatuses(
-    Map<int, SlotStatus> a,
-    Map<int, SlotStatus> b,
-  ) {
+  static bool _sameStatuses(Map<int, SlotStatus> a, Map<int, SlotStatus> b) {
     if (a.length != b.length) return false;
     for (final k in a.keys) {
       if (a[k] != b[k]) return false;
@@ -164,7 +169,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final fs = FirestoreService();
+    final fs = _fs;
     final dateStr = fmtDate(_selected);
     // Lapangan nonaktif tidak bisa dibooking (Fase C).
     if (!widget.field.isActive) {
@@ -196,6 +201,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   initialDate: _selected,
                   initialStartHour: _sel.isEmpty ? null : _sel.start,
                   initialDuration: _sel.isEmpty ? null : _sel.hours,
+                  firestoreService: _fs,
                 ),
               ),
             ),
@@ -210,8 +216,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: PitchCard(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               onTap: _openCalendar,
               child: Row(
                 children: [
@@ -223,10 +228,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Tanggal main',
-                        style: DeofootTheme.captionStyle,
-                      ),
+                      Text('Tanggal main', style: DeofootTheme.captionStyle),
                       Text(
                         indoFullDate(_selected),
                         style: DeofootTheme.bodyStyle.copyWith(
@@ -236,10 +238,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     ],
                   ),
                   const Spacer(),
-                  const Icon(
-                    Icons.expand_more,
-                    color: DeofootTheme.ink60,
-                  ),
+                  const Icon(Icons.expand_more, color: DeofootTheme.ink60),
                 ],
               ),
             ),
@@ -250,11 +249,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _Legend(
-                  color: DeofootTheme.card,
-                  border: true,
-                  label: 'Bebas',
-                ),
+                _Legend(color: DeofootTheme.card, border: true, label: 'Bebas'),
                 SizedBox(width: 12),
                 _Legend(color: DeofootTheme.grey, label: 'Terisi'),
                 SizedBox(width: 12),
@@ -281,11 +276,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 // tanggal lama — jangan dipakai untuk tanggal baru
                 // (itulah sumber kedip v0.4). Data lama yang sudah
                 // dirender dipertahankan sampai data baru tiba.
-                final usable = snap.hasData &&
+                final usable =
+                    snap.hasData &&
                     snap.connectionState != ConnectionState.waiting;
                 if (usable) {
-                  final statuses =
-                      slotStatuses(snap.data!, widget.field.id, dateStr);
+                  final statuses = slotStatuses(
+                    snap.data!,
+                    widget.field.id,
+                    dateStr,
+                  );
                   if (_lastStatuses == null ||
                       _lastDateStr != dateStr ||
                       !_sameStatuses(_lastStatuses!, statuses)) {
@@ -312,15 +311,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 }
                 if (_lastStatuses == null) return _skeletonGrid();
                 final show = _lastStatuses!;
-                final waiting =
-                    snap.connectionState == ConnectionState.waiting;
+                final waiting = snap.connectionState == ConnectionState.waiting;
                 return StatusSwapFade(
                   swapKey: '$_lastDateStr|${_statusHash(show)}',
                   child: SlotGrid(
                     statuses: show,
                     selection: _sel,
-                    isPast: (h) =>
-                        isPastSlot(_selected, h, DateTime.now()),
+                    isPast: (h) => isPastSlot(_selected, h, DateTime.now()),
                     // Selama data tanggal baru belum tiba, grid
                     // tampil stabil tapi tidak menerima tap (cegah
                     // memilih dari data basi).
@@ -398,14 +395,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                             child: PitchButton(
                               label: 'Lanjut',
                               icon: Icons.arrow_forward,
-                              onPressed: () =>
-                                  Navigator.of(context).push(
+                              onPressed: () => Navigator.of(context).push(
                                 MaterialPageRoute(
                                   builder: (_) => BookingScreen(
                                     field: widget.field,
                                     date: _selected,
                                     startHour: _sel.start!,
                                     endHour: _sel.end!,
+                                    firestoreService: _fs,
                                   ),
                                 ),
                               ),
@@ -426,7 +423,11 @@ class _Legend extends StatelessWidget {
   final Color color;
   final String label;
   final bool border;
-  const _Legend({required this.color, required this.label, this.border = false});
+  const _Legend({
+    required this.color,
+    required this.label,
+    this.border = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -444,10 +445,7 @@ class _Legend extends StatelessWidget {
         const SizedBox(width: 4),
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: DeofootTheme.textMuted,
-          ),
+          style: const TextStyle(fontSize: 12, color: DeofootTheme.textMuted),
         ),
       ],
     );

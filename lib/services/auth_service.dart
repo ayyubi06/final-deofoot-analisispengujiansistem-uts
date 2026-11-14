@@ -3,7 +3,9 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 /// Wrapper Firebase Auth dengan pesan error Indonesia yang jelas.
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  AuthService({FirebaseAuth? auth}) : _auth = auth ?? FirebaseAuth.instance;
+
+  final FirebaseAuth _auth;
 
   Stream<User?> get authState => _auth.authStateChanges();
   User? get currentUser => _auth.currentUser;
@@ -19,7 +21,9 @@ class AuthService {
   Future<void> register(String email, String password) async {
     try {
       await _auth.createUserWithEmailAndPassword(
-          email: email, password: password);
+        email: email,
+        password: password,
+      );
     } on FirebaseAuthException catch (e) {
       throw _pesan(e);
     }

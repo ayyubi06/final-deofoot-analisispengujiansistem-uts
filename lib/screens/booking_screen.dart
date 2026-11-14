@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
@@ -25,13 +26,22 @@ class BookingScreen extends StatefulWidget {
   final DateTime date;
   final int startHour;
   final int endHour; // eksklusif
-  const BookingScreen({
+  final FirestoreService firestoreService;
+  final AuthService authService;
+  final NotificationService notificationService;
+
+  BookingScreen({
     super.key,
     required this.field,
     required this.date,
     required this.startHour,
     required this.endHour,
-  });
+    FirestoreService? firestoreService,
+    AuthService? authService,
+    NotificationService? notificationService,
+  }) : firestoreService = firestoreService ?? FirestoreService(),
+       authService = authService ?? AuthService(),
+       notificationService = notificationService ?? NotificationService();
 
   @override
   State<BookingScreen> createState() => _BookingScreenState();
@@ -39,8 +49,8 @@ class BookingScreen extends StatefulWidget {
 
 class _BookingScreenState extends State<BookingScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _fs = FirestoreService();
-  final _auth = AuthService();
+  FirestoreService get _fs => widget.firestoreService;
+  AuthService get _auth => widget.authService;
   final _picker = ImagePicker();
   final _waCtrl = TextEditingController();
   XFile? _proof;
@@ -134,8 +144,8 @@ class _BookingScreenState extends State<BookingScreen> {
       );
       // Izin notifikasi diminta pada momen ini — sesudah booking
       // pertama dibuat (spek A4, rework T2) — lalu jadwalkan pengingat.
-      await NotificationService().mintaIzin();
-      NotificationService().rekonsiliasiUntukUser(u.uid);
+      await widget.notificationService.mintaIzin();
+      widget.notificationService.rekonsiliasiUntukUser(u.uid);
       if (!mounted) return;
       // Keadaan sukses (§3.5): layar sukses menggantikan formulir.
       Navigator.of(context).pushReplacement(
@@ -145,8 +155,9 @@ class _BookingScreenState extends State<BookingScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(e.message),
-              backgroundColor: DeofootTheme.danger),
+            content: Text(e.message),
+            backgroundColor: DeofootTheme.danger,
+          ),
         );
         Navigator.of(context).pop(); // kembali ke jadwal
       }
@@ -155,9 +166,11 @@ class _BookingScreenState extends State<BookingScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text(
-                  'Gagal mengirim booking. Periksa koneksi lalu coba lagi.'),
-              backgroundColor: DeofootTheme.danger),
+            content: Text(
+              'Gagal mengirim booking. Periksa koneksi lalu coba lagi.',
+            ),
+            backgroundColor: DeofootTheme.danger,
+          ),
         );
       }
     } finally {
@@ -186,8 +199,10 @@ class _BookingScreenState extends State<BookingScreen> {
                   children: [
                     _row('Lapangan', widget.field.name),
                     _row('Tanggal', indoFullDate(widget.date)),
-                    _row('Jam',
-                        '${hourLabel(widget.startHour)} – ${hourLabel(widget.endHour)}'),
+                    _row(
+                      'Jam',
+                      '${hourLabel(widget.startHour)} – ${hourLabel(widget.endHour)}',
+                    ),
                     _row('Durasi', '${_hours * 60} menit'),
                     const Divider(),
                     _row('Total', fmtRupiah(_total), total: true),
@@ -224,9 +239,10 @@ class _BookingScreenState extends State<BookingScreen> {
                       for (var i = 0; i < _payMethods.length; i++)
                         RadioListTile<int>(
                           value: i,
-                          title: Text(_payMethods[i].$1,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600)),
+                          title: Text(
+                            _payMethods[i].$1,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
                           subtitle: Text(_payMethods[i].$2),
                         ),
                     ],
@@ -238,27 +254,25 @@ class _BookingScreenState extends State<BookingScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Tujuan (${method.$1}):',
-                        style: const TextStyle(
-                            color: DeofootTheme.textMuted)),
+                    Text(
+                      'Tujuan (${method.$1}):',
+                      style: const TextStyle(color: DeofootTheme.textMuted),
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       'Nomor DANA: $danaNumber',
-                      style: DeofootTheme.tabular(
-                        DeofootTheme.titleStyle,
-                      ),
+                      style: DeofootTheme.tabular(DeofootTheme.titleStyle),
                     ),
-                    Text('a.n. $danaName',
-                        style: const TextStyle(
-                            color: DeofootTheme.textMuted)),
+                    Text(
+                      'a.n. $danaName',
+                      style: const TextStyle(color: DeofootTheme.textMuted),
+                    ),
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
                       onPressed: () {
-                        Clipboard.setData(
-                            ClipboardData(text: danaNumber));
+                        Clipboard.setData(ClipboardData(text: danaNumber));
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Nomor DANA disalin.')),
+                          const SnackBar(content: Text('Nomor DANA disalin.')),
                         );
                       },
                       icon: const Icon(Icons.copy_outlined),
@@ -267,7 +281,8 @@ class _BookingScreenState extends State<BookingScreen> {
                         foregroundColor: DeofootTheme.pitch700,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(
-                              DeofootTheme.radiusButton),
+                            DeofootTheme.radiusButton,
+                          ),
                         ),
                       ),
                     ),
@@ -283,7 +298,8 @@ class _BookingScreenState extends State<BookingScreen> {
                     if (_proof != null)
                       ClipRRect(
                         borderRadius: BorderRadius.circular(
-                            DeofootTheme.radiusCard),
+                          DeofootTheme.radiusCard,
+                        ),
                         child: Image.file(
                           File(_proof!.path),
                           height: 200,
@@ -297,13 +313,13 @@ class _BookingScreenState extends State<BookingScreen> {
                         decoration: BoxDecoration(
                           color: DeofootTheme.surfacePitch,
                           borderRadius: BorderRadius.circular(
-                              DeofootTheme.radiusCard),
+                            DeofootTheme.radiusCard,
+                          ),
                         ),
                         child: const Center(
                           child: Text(
                             'Belum ada bukti transfer',
-                            style: TextStyle(
-                                color: DeofootTheme.textMuted),
+                            style: TextStyle(color: DeofootTheme.textMuted),
                           ),
                         ),
                       ),
@@ -311,14 +327,17 @@ class _BookingScreenState extends State<BookingScreen> {
                     OutlinedButton.icon(
                       onPressed: _pickSheet,
                       icon: const Icon(Icons.upload_outlined),
-                      label: Text(_proof == null
-                          ? 'Pilih bukti transfer'
-                          : 'Ganti bukti transfer'),
+                      label: Text(
+                        _proof == null
+                            ? 'Pilih bukti transfer'
+                            : 'Ganti bukti transfer',
+                      ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: DeofootTheme.pitch700,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(
-                              DeofootTheme.radiusButton),
+                            DeofootTheme.radiusButton,
+                          ),
                         ),
                       ),
                     ),
@@ -340,8 +359,7 @@ class _BookingScreenState extends State<BookingScreen> {
               ],
               PitchButton(
                 label: _sending ? 'Mengirim…' : 'Kirim Booking',
-                onPressed:
-                    (_proof == null || _sending) ? null : _send,
+                onPressed: (_proof == null || _sending) ? null : _send,
               ),
               if (_proof == null)
                 const Padding(
@@ -350,8 +368,9 @@ class _BookingScreenState extends State<BookingScreen> {
                     'Pilih bukti transfer dulu untuk mengaktifkan tombol.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                        fontSize: 12,
-                        color: DeofootTheme.textMuted),
+                      fontSize: 12,
+                      color: DeofootTheme.textMuted,
+                    ),
                   ),
                 ),
             ],
@@ -362,52 +381,53 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Widget _stepTitle(String n, String t) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 14,
-              backgroundColor: DeofootTheme.pitch700,
-              child: Text(n,
-                  style: const TextStyle(
-                      color: Colors.white, fontSize: 12)),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              t,
-              style: DeofootTheme.bodyStyle.copyWith(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: DeofootTheme.pitch900,
-              ),
-            ),
-          ],
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(
+      children: [
+        CircleAvatar(
+          radius: 14,
+          backgroundColor: DeofootTheme.pitch700,
+          child: Text(
+            n,
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+          ),
         ),
-      );
+        const SizedBox(width: 8),
+        Text(
+          t,
+          style: DeofootTheme.bodyStyle.copyWith(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: DeofootTheme.pitch900,
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _row(String k, String v, {bool total = false}) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(k, style: const TextStyle(color: DeofootTheme.textMuted)),
-            Text(
-              v,
-              style: total
-                  ? DeofootTheme.tabular(
-                      DeofootTheme.bodyStyle.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: DeofootTheme.pitch700,
-                      ),
-                    )
-                  : const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: DeofootTheme.pitch900,
-                    ),
-            ),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(k, style: const TextStyle(color: DeofootTheme.textMuted)),
+        Text(
+          v,
+          style: total
+              ? DeofootTheme.tabular(
+                  DeofootTheme.bodyStyle.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: DeofootTheme.pitch700,
+                  ),
+                )
+              : const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: DeofootTheme.pitch900,
+                ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 /// Keadaan sukses booking (§3.5): tanda centang POP IN dengan
@@ -460,10 +480,8 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen>
               Center(
                 child: AnimatedBuilder(
                   animation: _pop,
-                  builder: (context, child) => Transform.scale(
-                    scale: _pop.value,
-                    child: child,
-                  ),
+                  builder: (context, child) =>
+                      Transform.scale(scale: _pop.value, child: child),
                   child: Container(
                     width: 88,
                     height: 88,

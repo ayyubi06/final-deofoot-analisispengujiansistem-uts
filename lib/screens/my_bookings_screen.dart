@@ -14,12 +14,23 @@ import 'user_series_screen.dart';
 /// kartu seri membuka rincian seri pengguna. Fungsi & redaksi
 /// tidak berubah dari v0.4.1.)
 class MyBookingsScreen extends StatelessWidget {
-  const MyBookingsScreen({super.key});
+  final AuthService authService;
+  final FirestoreService firestoreService;
+  final NotificationService notificationService;
+
+  MyBookingsScreen({
+    super.key,
+    AuthService? authService,
+    FirestoreService? firestoreService,
+    NotificationService? notificationService,
+  }) : authService = authService ?? AuthService(),
+       firestoreService = firestoreService ?? FirestoreService(),
+       notificationService = notificationService ?? NotificationService();
 
   @override
   Widget build(BuildContext context) {
-    final uid = AuthService().currentUser!.uid;
-    final fs = FirestoreService();
+    final uid = authService.currentUser!.uid;
+    final fs = firestoreService;
     return DefaultTabController(
       length: 2,
       child: Scaffold(
@@ -29,7 +40,10 @@ class MyBookingsScreen extends StatelessWidget {
             indicatorColor: DeofootTheme.volt,
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,
-            tabs: [Tab(text: 'Akan datang'), Tab(text: 'Riwayat')],
+            tabs: [
+              Tab(text: 'Akan datang'),
+              Tab(text: 'Riwayat'),
+            ],
           ),
         ),
         body: Column(
@@ -42,8 +56,11 @@ class MyBookingsScreen extends StatelessWidget {
               child: const Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.notifications_outlined,
-                      size: 16, color: DeofootTheme.pitch700),
+                  Icon(
+                    Icons.notifications_outlined,
+                    size: 16,
+                    color: DeofootTheme.pitch700,
+                  ),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -53,7 +70,9 @@ class MyBookingsScreen extends StatelessWidget {
                       'tidak memunculkan notifikasi — itu membutuhkan '
                       'notifikasi push server (FCM).',
                       style: TextStyle(
-                          fontSize: 12, color: DeofootTheme.textMuted),
+                        fontSize: 12,
+                        color: DeofootTheme.textMuted,
+                      ),
                     ),
                   ),
                 ],
@@ -92,12 +111,16 @@ class MyBookingsScreen extends StatelessWidget {
   }
 
   Widget _list(
-      BuildContext context, List<Booking> items,
-      {required bool showCancel}) {
+    BuildContext context,
+    List<Booking> items, {
+    required bool showCancel,
+  }) {
     if (items.isEmpty) {
       return const Center(
-        child: Text('Belum ada booking.',
-            style: TextStyle(color: DeofootTheme.textMuted)),
+        child: Text(
+          'Belum ada booking.',
+          style: TextStyle(color: DeofootTheme.textMuted),
+        ),
       );
     }
     return ListView.builder(
@@ -106,6 +129,9 @@ class MyBookingsScreen extends StatelessWidget {
       itemBuilder: (_, i) => _BookingCard(
         booking: items[i],
         showCancel: showCancel,
+        authService: authService,
+        firestoreService: firestoreService,
+        notificationService: notificationService,
       ),
     );
   }
@@ -114,7 +140,17 @@ class MyBookingsScreen extends StatelessWidget {
 class _BookingCard extends StatelessWidget {
   final Booking booking;
   final bool showCancel;
-  const _BookingCard({required this.booking, required this.showCancel});
+  final AuthService authService;
+  final FirestoreService firestoreService;
+  final NotificationService notificationService;
+
+  const _BookingCard({
+    required this.booking,
+    required this.showCancel,
+    required this.authService,
+    required this.firestoreService,
+    required this.notificationService,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -127,14 +163,15 @@ class _BookingCard extends StatelessWidget {
         onTap: b.seriesId == null
             ? null
             : () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => UserSeriesScreen(
-                      fieldName: b.fieldName,
-                      meetingsStream: FirestoreService()
-                          .watchBookingsBySeries(b.seriesId!),
+                MaterialPageRoute(
+                  builder: (_) => UserSeriesScreen(
+                    fieldName: b.fieldName,
+                    meetingsStream: firestoreService.watchBookingsBySeries(
+                      b.seriesId!,
                     ),
                   ),
                 ),
+              ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -155,17 +192,21 @@ class _BookingCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
-                      color:
-                          DeofootTheme.volt.withValues(alpha: 0.35),
+                      color: DeofootTheme.volt.withValues(alpha: 0.35),
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.repeat,
-                            size: 12, color: DeofootTheme.pitch700),
+                        const Icon(
+                          Icons.repeat,
+                          size: 12,
+                          color: DeofootTheme.pitch700,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           'Langganan',
@@ -185,7 +226,9 @@ class _BookingCard extends StatelessWidget {
                   swapKey: b.status,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: DeofootTheme.statusColor(b.status)
                           .withValues(alpha: 0.15),
@@ -204,13 +247,14 @@ class _BookingCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Text('${b.date} • ${b.startTime}–${b.endTime}',
-                style: const TextStyle(color: DeofootTheme.textMuted)),
+            Text(
+              '${b.date} • ${b.startTime}–${b.endTime}',
+              style: const TextStyle(color: DeofootTheme.textMuted),
+            ),
             Text(
               fmtRupiah(b.totalPrice),
               style: DeofootTheme.tabular(
-                DeofootTheme.bodyStyle
-                    .copyWith(fontWeight: FontWeight.w600),
+                DeofootTheme.bodyStyle.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
             if (showCancel) ...[
@@ -218,9 +262,7 @@ class _BookingCard extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
-                  onPressed: canCancel
-                      ? () => _confirmCancel(context)
-                      : null,
+                  onPressed: canCancel ? () => _confirmCancel(context) : null,
                   style: OutlinedButton.styleFrom(
                     foregroundColor: DeofootTheme.danger,
                     side: BorderSide(
@@ -230,7 +272,8 @@ class _BookingCard extends StatelessWidget {
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(
-                          DeofootTheme.radiusButton),
+                        DeofootTheme.radiusButton,
+                      ),
                     ),
                   ),
                   child: const Text('Batalkan'),
@@ -243,7 +286,9 @@ class _BookingCard extends StatelessWidget {
                   child: Text(
                     'Tidak bisa dibatalkan (≤ 2 jam sebelum mulai).',
                     style: TextStyle(
-                        fontSize: 12, color: DeofootTheme.textMuted),
+                      fontSize: 12,
+                      color: DeofootTheme.textMuted,
+                    ),
                   ),
                 ),
               // Sisa seri hanya untuk pertemuan yang sudah Disetujui
@@ -262,7 +307,8 @@ class _BookingCard extends StatelessWidget {
                       side: const BorderSide(color: DeofootTheme.danger),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(
-                            DeofootTheme.radiusButton),
+                          DeofootTheme.radiusButton,
+                        ),
                       ),
                     ),
                   ),
@@ -281,7 +327,8 @@ class _BookingCard extends StatelessWidget {
       builder: (_) => AlertDialog(
         title: const Text('Batalkan booking?'),
         content: Text(
-            'Booking ${booking.fieldName} pada ${booking.date} jam ${booking.startTime} akan dibatalkan.'),
+          'Booking ${booking.fieldName} pada ${booking.date} jam ${booking.startTime} akan dibatalkan.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -289,8 +336,7 @@ class _BookingCard extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-                foregroundColor: DeofootTheme.danger),
+            style: TextButton.styleFrom(foregroundColor: DeofootTheme.danger),
             child: const Text('Ya, batalkan'),
           ),
         ],
@@ -302,17 +348,17 @@ class _BookingCard extends StatelessWidget {
         // Pertemuan seri: batalkan lewat jalur seri agar tanggalnya
         // tercatat di dokumen seri (Fase E). Booking biasa: jalur lama.
         if (booking.seriesId != null) {
-          await FirestoreService().cancelSeriesMeeting(
+          await firestoreService.cancelSeriesMeeting(
             bookingId: booking.id,
             seriesId: booking.seriesId!,
             date: booking.date,
           );
         } else {
-          await FirestoreService().cancelBooking(booking.id);
+          await firestoreService.cancelBooking(booking.id);
         }
         // Pengingat booking ini dibatalkan oleh rekonsiliasi (Fase A).
-        final uid = AuthService().currentUser?.uid;
-        if (uid != null) NotificationService().rekonsiliasiUntukUser(uid);
+        final uid = authService.currentUser?.uid;
+        if (uid != null) notificationService.rekonsiliasiUntukUser(uid);
         messenger.showSnackBar(
           const SnackBar(content: Text('Booking dibatalkan.')),
         );
@@ -320,8 +366,9 @@ class _BookingCard extends StatelessWidget {
         debugPrint('MyBookingsScreen._confirmCancel gagal: $e');
         messenger.showSnackBar(
           const SnackBar(
-              content: Text('Gagal membatalkan. Coba lagi.'),
-              backgroundColor: DeofootTheme.danger),
+            content: Text('Gagal membatalkan. Coba lagi.'),
+            backgroundColor: DeofootTheme.danger,
+          ),
         );
       }
     }
@@ -335,7 +382,8 @@ class _BookingCard extends StatelessWidget {
       builder: (_) => AlertDialog(
         title: const Text('Batalkan sisa seri?'),
         content: Text(
-            'Semua pertemuan seri ${booking.fieldName} yang belum dimainkan akan dibatalkan. Pertemuan yang sudah lewat tidak berubah.'),
+          'Semua pertemuan seri ${booking.fieldName} yang belum dimainkan akan dibatalkan. Pertemuan yang sudah lewat tidak berubah.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -343,8 +391,7 @@ class _BookingCard extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style:
-                TextButton.styleFrom(foregroundColor: DeofootTheme.danger),
+            style: TextButton.styleFrom(foregroundColor: DeofootTheme.danger),
             child: const Text('Ya, batalkan sisa seri'),
           ),
         ],
@@ -353,10 +400,11 @@ class _BookingCard extends StatelessWidget {
     if (ok == true && context.mounted) {
       final messenger = ScaffoldMessenger.of(context);
       try {
-        final n =
-            await FirestoreService().cancelRemainingSeries(booking.seriesId!);
-        final uid = AuthService().currentUser?.uid;
-        if (uid != null) NotificationService().rekonsiliasiUntukUser(uid);
+        final n = await firestoreService.cancelRemainingSeries(
+          booking.seriesId!,
+        );
+        final uid = authService.currentUser?.uid;
+        if (uid != null) notificationService.rekonsiliasiUntukUser(uid);
         messenger.showSnackBar(
           SnackBar(content: Text('Sisa seri dibatalkan ($n pertemuan).')),
         );
@@ -364,8 +412,9 @@ class _BookingCard extends StatelessWidget {
         debugPrint('MyBookingsScreen._confirmCancelSeries gagal: $e');
         messenger.showSnackBar(
           const SnackBar(
-              content: Text('Gagal membatalkan seri. Coba lagi.'),
-              backgroundColor: DeofootTheme.danger),
+            content: Text('Gagal membatalkan seri. Coba lagi.'),
+            backgroundColor: DeofootTheme.danger,
+          ),
         );
       }
     }

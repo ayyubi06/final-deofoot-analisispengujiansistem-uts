@@ -3,6 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tzdata;
+
 import '../notifications_logic.dart';
 import 'firestore_service.dart';
 
@@ -18,10 +19,22 @@ import 'firestore_service.dart';
 class NotificationService {
   static final NotificationService _instance = NotificationService._();
   factory NotificationService() => _instance;
-  NotificationService._();
+  NotificationService._({
+    FlutterLocalNotificationsPlugin? plugin,
+    FirestoreService? firestoreService,
+  }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin(),
+       _fs = firestoreService ?? FirestoreService();
 
-  final FlutterLocalNotificationsPlugin _plugin =
-      FlutterLocalNotificationsPlugin();
+  /// Untuk test: buat instance dengan plugin / Firestore palsu.
+  /// Kode produksi tetap memakai singleton lewat NotificationService().
+  static NotificationService forTest({
+    FlutterLocalNotificationsPlugin? plugin,
+    FirestoreService? firestoreService,
+  }) =>
+      NotificationService._(plugin: plugin, firestoreService: firestoreService);
+
+  final FlutterLocalNotificationsPlugin _plugin;
+  final FirestoreService _fs;
   bool _inited = false;
 
   /// Dipanggil saat notifikasi diketuk; payload = bookingId.
@@ -59,8 +72,10 @@ class NotificationService {
   /// aplikasi — penjadwalan tetap dicoba; sistem yang menahan tampilnya.
   Future<void> mintaIzin() async {
     await init();
-    final android = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     await android?.requestNotificationsPermission();
   }
 
@@ -71,8 +86,7 @@ class NotificationService {
   Future<void> rekonsiliasiUntukUser(String uid) async {
     try {
       await init();
-      final bookings =
-          await FirestoreService().watchMyBookings(uid).first;
+      final bookings = await _fs.watchMyBookings(uid).first;
       final pending = await _plugin.pendingNotificationRequests();
       final prefs = await SharedPreferences.getInstance();
       final shown = (prefs.getStringList(_keyShown) ?? [])
@@ -80,8 +94,10 @@ class NotificationService {
           .whereType<int>()
           .toSet();
 
-      final rencana =
-          rencanaNotifikasi(bookings: bookings, now: DateTime.now());
+      final rencana = rencanaNotifikasi(
+        bookings: bookings,
+        now: DateTime.now(),
+      );
       final hasil = rekonsiliasiNotifikasi(
         rencana: rencana,
         idTerjadwal: pending.map((p) => p.id).toSet(),
@@ -116,8 +132,7 @@ class NotificationService {
       // tidak menghasilkan rencana apa pun (sudah lewat/selesai).
       final idRencana = rencana.map((r) => r.id).toSet();
       shown.removeWhere((id) => !idRencana.contains(id));
-      await prefs.setStringList(
-          _keyShown, shown.map((e) => '$e').toList());
+      await prefs.setStringList(_keyShown, shown.map((e) => '$e').toList());
     } catch (e) {
       debugPrint('NotificationService.rekonsiliasiUntukUser gagal: $e');
     }

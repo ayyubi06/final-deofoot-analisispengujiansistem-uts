@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../booking_logic.dart';
@@ -16,7 +17,10 @@ import '../widgets/pitch_components.dart';
 /// (Fase G §3.8: kartu Pitch, rincian seri sebagai sheet layar
 /// penuh, thumbnail bukti -> pratinjau penuh shared element.)
 class VerifyScreen extends StatelessWidget {
-  const VerifyScreen({super.key});
+  final FirestoreService firestoreService;
+
+  VerifyScreen({super.key, FirestoreService? firestoreService})
+    : firestoreService = firestoreService ?? FirestoreService();
 
   @override
   Widget build(BuildContext context) {
@@ -24,16 +28,16 @@ class VerifyScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('Verifikasi Pembayaran')),
       body: Column(
         children: [
-          const _Dashboard(),
+          _Dashboard(firestoreService: firestoreService),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(16),
-              children: const [
+              children: [
                 _SectionTitle('Booking menunggu'),
-                _PendingBookings(),
+                _PendingBookings(firestoreService: firestoreService),
                 SizedBox(height: 8),
                 _SectionTitle('Langganan menunggu'),
-                _PendingSeries(),
+                _PendingSeries(firestoreService: firestoreService),
               ],
             ),
           ),
@@ -100,12 +104,14 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _PendingBookings extends StatelessWidget {
-  const _PendingBookings();
+  final FirestoreService firestoreService;
+
+  const _PendingBookings({required this.firestoreService});
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Booking>>(
-      stream: FirestoreService().watchPending(),
+      stream: firestoreService.watchPending(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const PitchSkeletonCard();
@@ -116,12 +122,17 @@ class _PendingBookings extends StatelessWidget {
         if (items.isEmpty) {
           return const Padding(
             padding: EdgeInsets.only(bottom: 12),
-            child: Text('Tidak ada booking menunggu verifikasi.',
-                style: TextStyle(color: DeofootTheme.textMuted)),
+            child: Text(
+              'Tidak ada booking menunggu verifikasi.',
+              style: TextStyle(color: DeofootTheme.textMuted),
+            ),
           );
         }
         return Column(
-          children: [for (final b in items) _PendingCard(booking: b)],
+          children: [
+            for (final b in items)
+              _PendingCard(booking: b, firestoreService: firestoreService),
+          ],
         );
       },
     );
@@ -129,23 +140,30 @@ class _PendingBookings extends StatelessWidget {
 }
 
 class _PendingSeries extends StatelessWidget {
-  const _PendingSeries();
+  final FirestoreService firestoreService;
+
+  const _PendingSeries({required this.firestoreService});
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<SubscriptionSeries>>(
-      stream: FirestoreService().watchPendingSeries(),
+      stream: firestoreService.watchPendingSeries(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const PitchSkeletonCard();
         }
         final items = snap.data ?? [];
         if (items.isEmpty) {
-          return const Text('Tidak ada langganan menunggu verifikasi.',
-              style: TextStyle(color: DeofootTheme.textMuted));
+          return const Text(
+            'Tidak ada langganan menunggu verifikasi.',
+            style: TextStyle(color: DeofootTheme.textMuted),
+          );
         }
         return Column(
-          children: [for (final s in items) _SeriesCard(series: s)],
+          children: [
+            for (final s in items)
+              _SeriesCard(series: s, firestoreService: firestoreService),
+          ],
         );
       },
     );
@@ -155,14 +173,18 @@ class _PendingSeries extends StatelessWidget {
 /// Buka rincian seri sebagai SHEET layar penuh (§3.8) — isi &
 /// keputusan sama dengan SeriesDetailScreen; Terima/Tolak tetap
 /// satu kali per seri lewat setSeriesStatus.
-void _openSeriesSheet(BuildContext context, SubscriptionSeries s) {
+void _openSeriesSheet(
+  BuildContext context,
+  SubscriptionSeries s,
+  FirestoreService firestoreService,
+) {
   showPitchSheet<void>(
     context,
     isScrollControlled: true,
     builder: (sheetContext) => FractionallySizedBox(
       heightFactor: 0.92,
       child: StreamBuilder<List<Booking>>(
-        stream: FirestoreService().watchBookingsBySeries(s.id),
+        stream: firestoreService.watchBookingsBySeries(s.id),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Padding(
@@ -178,23 +200,27 @@ void _openSeriesSheet(BuildContext context, SubscriptionSeries s) {
               final messenger = ScaffoldMessenger.of(context);
               final navigator = Navigator.of(sheetContext);
               try {
-                await FirestoreService().setSeriesStatus(
+                await firestoreService.setSeriesStatus(
                   s.id,
                   terima ? 'confirmed' : 'rejected',
                 );
                 navigator.pop();
                 messenger.showSnackBar(
                   SnackBar(
-                      content: Text(terima
+                    content: Text(
+                      terima
                           ? 'Seri disetujui, semua pertemuan aktif.'
-                          : 'Seri ditolak, semua slot kembali bebas.')),
+                          : 'Seri ditolak, semua slot kembali bebas.',
+                    ),
+                  ),
                 );
               } catch (e) {
                 debugPrint('SeriesSheet._proses gagal: $e');
                 messenger.showSnackBar(
                   const SnackBar(
-                      content: Text('Gagal memproses. Coba lagi.'),
-                      backgroundColor: DeofootTheme.danger),
+                    content: Text('Gagal memproses. Coba lagi.'),
+                    backgroundColor: DeofootTheme.danger,
+                  ),
                 );
               }
             },
@@ -210,7 +236,9 @@ void _openSeriesSheet(BuildContext context, SubscriptionSeries s) {
 /// Diketuk -> rincian seri (sheet); konfirmasi HANYA dari rincian.
 class _SeriesCard extends StatelessWidget {
   final SubscriptionSeries series;
-  const _SeriesCard({required this.series});
+  final FirestoreService firestoreService;
+
+  const _SeriesCard({required this.series, required this.firestoreService});
 
   @override
   Widget build(BuildContext context) {
@@ -221,7 +249,7 @@ class _SeriesCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: PitchCard(
-        onTap: () => _openSeriesSheet(context, s),
+        onTap: () => _openSeriesSheet(context, s, firestoreService),
         child: Row(
           children: [
             Expanded(
@@ -230,20 +258,28 @@ class _SeriesCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.repeat,
-                          size: 18, color: DeofootTheme.pitch700),
+                      const Icon(
+                        Icons.repeat,
+                        size: 18,
+                        color: DeofootTheme.pitch700,
+                      ),
                       const SizedBox(width: 6),
-                      const Text('Langganan rutin',
-                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      const Text(
+                        'Langganan rutin',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                       const Spacer(),
-                      Text('${s.meetingsTotal} pertemuan',
-                          style: const TextStyle(
-                              color: DeofootTheme.textMuted)),
+                      Text(
+                        '${s.meetingsTotal} pertemuan',
+                        style: const TextStyle(color: DeofootTheme.textMuted),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(s.userEmail,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(
+                    s.userEmail,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     '${s.fieldName} \u2022 setiap $hari ${s.startTime}\u2013${s.endTime}',
@@ -253,15 +289,15 @@ class _SeriesCard extends StatelessWidget {
                   Text(
                     'Total: ${fmtRupiah(s.totalHarga)}',
                     style: DeofootTheme.tabular(
-                      DeofootTheme.bodyStyle
-                          .copyWith(fontWeight: FontWeight.w600),
+                      DeofootTheme.bodyStyle.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right,
-                color: DeofootTheme.textMuted),
+            const Icon(Icons.chevron_right, color: DeofootTheme.textMuted),
           ],
         ),
       ),
@@ -276,14 +312,20 @@ class _SeriesCard extends StatelessWidget {
 /// isi yang sama sebagai sheet — layar ini dipertahankan.)
 class SeriesDetailScreen extends StatelessWidget {
   final SubscriptionSeries series;
-  const SeriesDetailScreen({super.key, required this.series});
+  final FirestoreService firestoreService;
+
+  SeriesDetailScreen({
+    super.key,
+    required this.series,
+    FirestoreService? firestoreService,
+  }) : firestoreService = firestoreService ?? FirestoreService();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Rincian Langganan')),
       body: StreamBuilder<List<Booking>>(
-        stream: FirestoreService().watchBookingsBySeries(series.id),
+        stream: firestoreService.watchBookingsBySeries(series.id),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Padding(
@@ -306,23 +348,27 @@ class SeriesDetailScreen extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     try {
-      await FirestoreService().setSeriesStatus(
+      await firestoreService.setSeriesStatus(
         series.id,
         terima ? 'confirmed' : 'rejected',
       );
       navigator.pop();
       messenger.showSnackBar(
         SnackBar(
-            content: Text(terima
+          content: Text(
+            terima
                 ? 'Seri disetujui, semua pertemuan aktif.'
-                : 'Seri ditolak, semua slot kembali bebas.')),
+                : 'Seri ditolak, semua slot kembali bebas.',
+          ),
+        ),
       );
     } catch (e) {
       debugPrint('SeriesDetailScreen._proses gagal: $e');
       messenger.showSnackBar(
         const SnackBar(
-            content: Text('Gagal memproses. Coba lagi.'),
-            backgroundColor: DeofootTheme.danger),
+          content: Text('Gagal memproses. Coba lagi.'),
+          backgroundColor: DeofootTheme.danger,
+        ),
       );
     }
   }
@@ -354,18 +400,26 @@ class SeriesDetailView extends StatelessWidget {
       children: [
         _bukti(context),
         const SizedBox(height: 12),
-        Text(s.userEmail,
-            style: const TextStyle(
-                fontSize: 16, fontWeight: FontWeight.w600)),
+        Text(
+          s.userEmail,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
         const SizedBox(height: 4),
         Row(
           children: [
-            const Icon(Icons.chat_outlined,
-                size: 14, color: DeofootTheme.textMuted),
+            const Icon(
+              Icons.chat_outlined,
+              size: 14,
+              color: DeofootTheme.textMuted,
+            ),
             const SizedBox(width: 4),
-            Text('WA: ${s.whatsapp.isEmpty ? '-' : s.whatsapp}',
-                style: const TextStyle(
-                    fontSize: 13, color: DeofootTheme.textMuted)),
+            Text(
+              'WA: ${s.whatsapp.isEmpty ? '-' : s.whatsapp}',
+              style: const TextStyle(
+                fontSize: 13,
+                color: DeofootTheme.textMuted,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 4),
@@ -388,15 +442,19 @@ class SeriesDetailView extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         if (meetings.isEmpty)
-          const Text('Belum ada data pertemuan.',
-              style: TextStyle(color: DeofootTheme.textMuted))
+          const Text(
+            'Belum ada data pertemuan.',
+            style: TextStyle(color: DeofootTheme.textMuted),
+          )
         else
           for (final b in meetings)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: PitchCard(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 12),
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 child: Row(
                   children: [
                     Expanded(
@@ -410,9 +468,10 @@ class SeriesDetailView extends StatelessWidget {
                       radius: 5,
                     ),
                     const SizedBox(width: 6),
-                    Text(DeofootTheme.statusLabel(b.status),
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600)),
+                    Text(
+                      DeofootTheme.statusLabel(b.status),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
                   ],
                 ),
               ),
@@ -421,13 +480,14 @@ class SeriesDetailView extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Total seri',
-                style: TextStyle(color: DeofootTheme.textMuted)),
+            const Text(
+              'Total seri',
+              style: TextStyle(color: DeofootTheme.textMuted),
+            ),
             Text(
               fmtRupiah(s.totalHarga),
               style: DeofootTheme.tabular(
-                DeofootTheme.titleStyle
-                    .copyWith(color: DeofootTheme.pitch700),
+                DeofootTheme.titleStyle.copyWith(color: DeofootTheme.pitch700),
               ),
             ),
           ],
@@ -464,15 +524,13 @@ class SeriesDetailView extends StatelessWidget {
         return GestureDetector(
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) =>
-                  ProofPreviewScreen(heroTag: tag, bytes: bytes),
+              builder: (_) => ProofPreviewScreen(heroTag: tag, bytes: bytes),
             ),
           ),
           child: Hero(
             tag: tag,
             child: ClipRRect(
-              borderRadius:
-                  BorderRadius.circular(DeofootTheme.radiusCard),
+              borderRadius: BorderRadius.circular(DeofootTheme.radiusCard),
               child: Image.memory(
                 bytes,
                 height: 200,
@@ -493,8 +551,10 @@ class SeriesDetailView extends StatelessWidget {
         borderRadius: BorderRadius.circular(DeofootTheme.radiusCard),
       ),
       child: const Center(
-        child: Text('Bukti tidak tersedia',
-            style: TextStyle(color: DeofootTheme.textMuted)),
+        child: Text(
+          'Bukti tidak tersedia',
+          style: TextStyle(color: DeofootTheme.textMuted),
+        ),
       ),
     );
   }
@@ -505,14 +565,15 @@ class SeriesDetailView extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title:
-            Text(terima ? 'Terima seri langganan?' : 'Tolak seri langganan?'),
+        title: Text(
+          terima ? 'Terima seri langganan?' : 'Tolak seri langganan?',
+        ),
         content: Text(
           (terima
                   ? 'Seluruh seri ${series.userEmail} (${series.fieldName}) akan DISETUJUI. '
-                      '$ikut pertemuan yang masih menunggu akan ikut disetujui.'
+                        '$ikut pertemuan yang masih menunggu akan ikut disetujui.'
                   : 'Seluruh seri ${series.userEmail} (${series.fieldName}) akan DITOLAK dan slotnya kembali bebas. '
-                      '$ikut pertemuan yang masih menunggu akan ikut ditolak.') +
+                        '$ikut pertemuan yang masih menunggu akan ikut ditolak.') +
               (utuh > 0
                   ? ' $utuh pertemuan yang sudah berubah status (mis. dibatalkan) tidak ikut berubah.'
                   : ''),
@@ -525,8 +586,9 @@ class SeriesDetailView extends StatelessWidget {
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(
-              foregroundColor:
-                  terima ? DeofootTheme.available : DeofootTheme.danger,
+              foregroundColor: terima
+                  ? DeofootTheme.available
+                  : DeofootTheme.danger,
             ),
             child: Text(terima ? 'Ya, terima' : 'Ya, tolak'),
           ),
@@ -539,19 +601,23 @@ class SeriesDetailView extends StatelessWidget {
 
 /// Dashboard mini admin: 3 angka hari ini, real-time dari Firestore.
 class _Dashboard extends StatelessWidget {
-  const _Dashboard();
+  final FirestoreService firestoreService;
+
+  const _Dashboard({required this.firestoreService});
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Booking>>(
-      stream: FirestoreService().watchBookingsToday(),
+      stream: firestoreService.watchBookingsToday(),
       builder: (context, snap) {
         final items = snap.data ?? [];
         final aktif = items
             .where((b) => b.status == 'pending' || b.status == 'confirmed')
             .toList();
         final slotTerisi = aktif.fold<int>(
-            0, (n, b) => n + (b.endMinutes - b.startMinutes) ~/ 60);
+          0,
+          (n, b) => n + (b.endMinutes - b.startMinutes) ~/ 60,
+        );
         final pemasukan = items
             .where((b) => b.status == 'confirmed')
             .fold<int>(0, (n, b) => n + b.totalPrice);
@@ -572,35 +638,37 @@ class _Dashboard extends StatelessWidget {
   }
 
   Widget _stat(String label, String value) => Expanded(
-        child: PitchCard(
-          padding:
-              const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-          child: Column(
-            children: [
-              Text(
-                value,
-                style: DeofootTheme.tabular(
-                  DeofootTheme.bodyStyle.copyWith(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: DeofootTheme.pitch900,
-                  ),
-                ),
+    child: PitchCard(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: DeofootTheme.tabular(
+              DeofootTheme.bodyStyle.copyWith(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: DeofootTheme.pitch900,
               ),
-              const SizedBox(height: 4),
-              Text(label,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 11, color: DeofootTheme.textMuted)),
-            ],
+            ),
           ),
-        ),
-      );
+          const SizedBox(height: 4),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 11, color: DeofootTheme.textMuted),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _PendingCard extends StatelessWidget {
   final Booking booking;
-  const _PendingCard({required this.booking});
+  final FirestoreService firestoreService;
+
+  const _PendingCard({required this.booking, required this.firestoreService});
 
   @override
   Widget build(BuildContext context) {
@@ -613,29 +681,37 @@ class _PendingCard extends StatelessWidget {
           children: [
             _thumb(context),
             const SizedBox(height: 12),
-            Text(b.userEmail,
-                style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(
+              b.userEmail,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.chat_outlined,
-                    size: 14, color: DeofootTheme.textMuted),
+                const Icon(
+                  Icons.chat_outlined,
+                  size: 14,
+                  color: DeofootTheme.textMuted,
+                ),
                 const SizedBox(width: 4),
-                Text('WA: ${b.whatsapp.isEmpty ? '-' : b.whatsapp}',
-                    style: const TextStyle(
-                        fontSize: 13, color: DeofootTheme.textMuted)),
+                Text(
+                  'WA: ${b.whatsapp.isEmpty ? '-' : b.whatsapp}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: DeofootTheme.textMuted,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 4),
             Text(
-                '${b.fieldName} • ${b.date} • ${b.startTime}–${b.endTime}',
-                style:
-                    const TextStyle(color: DeofootTheme.textMuted)),
+              '${b.fieldName} • ${b.date} • ${b.startTime}–${b.endTime}',
+              style: const TextStyle(color: DeofootTheme.textMuted),
+            ),
             Text(
               'Total: ${fmtRupiah(b.totalPrice)}',
               style: DeofootTheme.tabular(
-                DeofootTheme.bodyStyle
-                    .copyWith(fontWeight: FontWeight.w600),
+                DeofootTheme.bodyStyle.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
             const SizedBox(height: 12),
@@ -672,15 +748,13 @@ class _PendingCard extends StatelessWidget {
         return GestureDetector(
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) =>
-                  ProofPreviewScreen(heroTag: tag, bytes: bytes),
+              builder: (_) => ProofPreviewScreen(heroTag: tag, bytes: bytes),
             ),
           ),
           child: Hero(
             tag: tag,
             child: ClipRRect(
-              borderRadius:
-                  BorderRadius.circular(DeofootTheme.radiusCard),
+              borderRadius: BorderRadius.circular(DeofootTheme.radiusCard),
               child: Image.memory(
                 bytes,
                 height: 120,
@@ -698,16 +772,18 @@ class _PendingCard extends StatelessWidget {
   }
 
   Widget _noProof() => Container(
-        height: 80,
-        decoration: BoxDecoration(
-          color: DeofootTheme.surfacePitch,
-          borderRadius: BorderRadius.circular(DeofootTheme.radiusCard),
-        ),
-        child: const Center(
-          child: Text('Bukti tidak tersedia',
-              style: TextStyle(color: DeofootTheme.textMuted)),
-        ),
-      );
+    height: 80,
+    decoration: BoxDecoration(
+      color: DeofootTheme.surfacePitch,
+      borderRadius: BorderRadius.circular(DeofootTheme.radiusCard),
+    ),
+    child: const Center(
+      child: Text(
+        'Bukti tidak tersedia',
+        style: TextStyle(color: DeofootTheme.textMuted),
+      ),
+    ),
+  );
 
   Future<void> _confirm(BuildContext context, bool terima) async {
     final ok = await showDialog<bool>(
@@ -739,22 +815,26 @@ class _PendingCard extends StatelessWidget {
     if (ok == true && context.mounted) {
       final messenger = ScaffoldMessenger.of(context);
       try {
-        await FirestoreService().setBookingStatus(
+        await firestoreService.setBookingStatus(
           booking.id,
           terima ? 'confirmed' : 'rejected',
         );
         messenger.showSnackBar(
           SnackBar(
-              content: Text(terima
+            content: Text(
+              terima
                   ? 'Booking disetujui.'
-                  : 'Booking ditolak, slot kembali bebas.')),
+                  : 'Booking ditolak, slot kembali bebas.',
+            ),
+          ),
         );
       } catch (e) {
         debugPrint('VerifyScreen._confirm gagal: $e');
         messenger.showSnackBar(
           const SnackBar(
-              content: Text('Gagal memproses. Coba lagi.'),
-              backgroundColor: DeofootTheme.danger),
+            content: Text('Gagal memproses. Coba lagi.'),
+            backgroundColor: DeofootTheme.danger,
+          ),
         );
       }
     }

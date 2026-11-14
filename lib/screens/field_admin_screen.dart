@@ -15,11 +15,14 @@ import '../widgets/pitch_components.dart';
 /// PitchToggle, kartu nonaktif meredup di tempat, chip warna
 /// bercincin volt saat terpilih.)
 class FieldAdminScreen extends StatelessWidget {
-  const FieldAdminScreen({super.key});
+  final FirestoreService firestoreService;
+
+  FieldAdminScreen({super.key, FirestoreService? firestoreService})
+    : firestoreService = firestoreService ?? FirestoreService();
 
   @override
   Widget build(BuildContext context) {
-    final fs = FirestoreService();
+    final fs = firestoreService;
     return Scaffold(
       appBar: AppBar(title: const Text('Kelola Lapangan')),
       body: StreamBuilder<List<Field>>(
@@ -44,7 +47,10 @@ class FieldAdminScreen extends StatelessWidget {
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: fields.length,
-            itemBuilder: (_, i) => _FieldAdminCard(field: fields[i]),
+            itemBuilder: (_, i) => _FieldAdminCard(
+              field: fields[i],
+              firestoreService: firestoreService,
+            ),
           );
         },
       ),
@@ -56,6 +62,7 @@ class FieldAdminScreen extends StatelessWidget {
             MaterialPageRoute(
               builder: (_) => FieldFormScreen(
                 existingIds: fields.map((f) => f.id).toSet(),
+                firestoreService: firestoreService,
               ),
             ),
           );
@@ -69,7 +76,9 @@ class FieldAdminScreen extends StatelessWidget {
 
 class _FieldAdminCard extends StatelessWidget {
   final Field field;
-  const _FieldAdminCard({required this.field});
+  final FirestoreService firestoreService;
+
+  const _FieldAdminCard({required this.field, required this.firestoreService});
 
   @override
   Widget build(BuildContext context) {
@@ -79,13 +88,14 @@ class _FieldAdminCard extends StatelessWidget {
       child: PitchCard(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         onTap: () async {
-          final fields = await FirestoreService().watchFields().first;
+          final fields = await firestoreService.watchFields().first;
           if (!context.mounted) return;
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => FieldFormScreen(
                 existing: f,
                 existingIds: fields.map((x) => x.id).toSet(),
+                firestoreService: firestoreService,
               ),
             ),
           );
@@ -106,14 +116,16 @@ class _FieldAdminCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: f.color,
                         borderRadius: BorderRadius.circular(
-                            DeofootTheme.radiusCard),
+                          DeofootTheme.radiusCard,
+                        ),
                       ),
                       alignment: Alignment.center,
                       child: Text(
                         inisialNama(f.name),
                         style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold),
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -121,14 +133,18 @@ class _FieldAdminCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(f.name,
-                              style: DeofootTheme.bodyStyle.copyWith(
-                                  fontWeight: FontWeight.w600)),
+                          Text(
+                            f.name,
+                            style: DeofootTheme.bodyStyle.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                           Text(
                             '${f.category} • ${fmtRupiah(f.pricePerHour)}/jam'
                             '${f.isActive ? '' : ' • NONAKTIF'}',
-                            style: DeofootTheme.captionStyle
-                                .copyWith(fontSize: 13),
+                            style: DeofootTheme.captionStyle.copyWith(
+                              fontSize: 13,
+                            ),
                           ),
                         ],
                       ),
@@ -143,18 +159,24 @@ class _FieldAdminCard extends StatelessWidget {
               onChanged: (v) async {
                 final messenger = ScaffoldMessenger.of(context);
                 try {
-                  await FirestoreService().setFieldActive(f.id, v);
-                  messenger.showSnackBar(SnackBar(
-                    content: Text(v
-                        ? '${f.name} diaktifkan.'
-                        : '${f.name} dinonaktifkan (disembunyikan dari user).'),
-                  ));
+                  await firestoreService.setFieldActive(f.id, v);
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        v
+                            ? '${f.name} diaktifkan.'
+                            : '${f.name} dinonaktifkan (disembunyikan dari user).',
+                      ),
+                    ),
+                  );
                 } catch (e) {
                   debugPrint('FieldAdmin setFieldActive gagal: $e');
-                  messenger.showSnackBar(const SnackBar(
-                    content: Text('Gagal mengubah status. Coba lagi.'),
-                    backgroundColor: DeofootTheme.danger,
-                  ));
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('Gagal mengubah status. Coba lagi.'),
+                      backgroundColor: DeofootTheme.danger,
+                    ),
+                  );
                 }
               },
             ),
@@ -169,7 +191,14 @@ class _FieldAdminCard extends StatelessWidget {
 class FieldFormScreen extends StatefulWidget {
   final Field? existing;
   final Set<String> existingIds;
-  const FieldFormScreen({super.key, this.existing, required this.existingIds});
+  final FirestoreService firestoreService;
+
+  FieldFormScreen({
+    super.key,
+    this.existing,
+    required this.existingIds,
+    FirestoreService? firestoreService,
+  }) : firestoreService = firestoreService ?? FirestoreService();
 
   @override
   State<FieldFormScreen> createState() => _FieldFormScreenState();
@@ -200,8 +229,9 @@ class _FieldFormScreenState extends State<FieldFormScreen> {
     super.initState();
     final e = widget.existing;
     _namaCtrl = TextEditingController(text: e?.name ?? '');
-    _hargaCtrl =
-        TextEditingController(text: e == null ? '' : '${e.pricePerHour}');
+    _hargaCtrl = TextEditingController(
+      text: e == null ? '' : '${e.pricePerHour}',
+    );
     _kategoriSel = e?.category ?? 'Futsal';
     _warnaArgb = e?.color.toARGB32() ?? 0xFF102A43;
     _aktif = e?.isActive ?? true;
@@ -215,10 +245,7 @@ class _FieldFormScreenState extends State<FieldFormScreen> {
   }
 
   Future<void> _simpan() async {
-    final err = validasiField(
-      nama: _namaCtrl.text,
-      hargaTeks: _hargaCtrl.text,
-    );
+    final err = validasiField(nama: _namaCtrl.text, hargaTeks: _hargaCtrl.text);
     if (err != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(err), backgroundColor: DeofootTheme.danger),
@@ -237,17 +264,18 @@ class _FieldFormScreenState extends State<FieldFormScreen> {
     );
     try {
       if (e == null) {
-        await FirestoreService().createField(f);
+        await widget.firestoreService.createField(f);
       } else {
-        await FirestoreService().updateField(f);
+        await widget.firestoreService.updateField(f);
       }
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(e == null
-                ? 'Lapangan ditambahkan.'
-                : 'Lapangan disimpan.')),
+          content: Text(
+            e == null ? 'Lapangan ditambahkan.' : 'Lapangan disimpan.',
+          ),
+        ),
       );
     } catch (err2) {
       debugPrint('FieldFormScreen._simpan gagal: $err2');
@@ -267,8 +295,7 @@ class _FieldFormScreenState extends State<FieldFormScreen> {
   Widget build(BuildContext context) {
     final isNew = widget.existing == null;
     return Scaffold(
-      appBar: AppBar(
-          title: Text(isNew ? 'Tambah Lapangan' : 'Ubah Lapangan')),
+      appBar: AppBar(title: Text(isNew ? 'Tambah Lapangan' : 'Ubah Lapangan')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -324,14 +351,19 @@ class _FieldFormScreenState extends State<FieldFormScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Lapangan aktif',
-                          style: DeofootTheme.bodyStyle
-                              .copyWith(fontWeight: FontWeight.w600)),
+                      Text(
+                        'Lapangan aktif',
+                        style: DeofootTheme.bodyStyle.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       const SizedBox(height: 2),
                       const Text(
                         'Nonaktif = disembunyikan dari user & tidak bisa dibooking. Riwayat booking lama tetap utuh.',
                         style: TextStyle(
-                            fontSize: 12, color: DeofootTheme.textMuted),
+                          fontSize: 12,
+                          color: DeofootTheme.textMuted,
+                        ),
                       ),
                     ],
                   ),
@@ -374,15 +406,15 @@ class _FieldFormScreenState extends State<FieldFormScreen> {
   }
 
   Widget _label(String t) => Padding(
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Text(
-          t,
-          style: DeofootTheme.bodyStyle.copyWith(
-            fontWeight: FontWeight.w600,
-            color: DeofootTheme.pitch900,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Text(
+      t,
+      style: DeofootTheme.bodyStyle.copyWith(
+        fontWeight: FontWeight.w600,
+        color: DeofootTheme.pitch900,
+      ),
+    ),
+  );
 }
 
 /// Chip warna form lapangan: contoh warna + nama; yang terpilih

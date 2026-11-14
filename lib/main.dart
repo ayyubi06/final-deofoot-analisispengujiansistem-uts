@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import 'theme.dart';
 import 'widgets/pitch_components.dart';
 import 'services/auth_service.dart';
@@ -82,9 +83,7 @@ class _FirebaseLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
-    );
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }
 
@@ -104,8 +103,11 @@ class _FirebaseError extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(Icons.cloud_off_outlined,
-                  size: 72, color: Colors.redAccent),
+              const Icon(
+                Icons.cloud_off_outlined,
+                size: 72,
+                color: Colors.redAccent,
+              ),
               const SizedBox(height: 16),
               const Text(
                 'Gagal terhubung ke server',
@@ -126,8 +128,7 @@ class _FirebaseError extends StatelessWidget {
                 ),
                 child: Text(
                   error,
-                  style:
-                      const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                 ),
               ),
               const SizedBox(height: 24),
@@ -242,8 +243,8 @@ class _MainNavState extends State<MainNav> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final pages = [
       HomeScreen(userEmail: widget.userEmail),
-      const MyBookingsScreen(),
-      const ProfileScreen(),
+      MyBookingsScreen(),
+      ProfileScreen(),
     ];
     return Scaffold(
       body: IndexedStack(index: _idx, children: pages),

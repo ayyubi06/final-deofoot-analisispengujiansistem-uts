@@ -14,7 +14,16 @@ import '../widgets/pitch_components.dart';
 /// eksplisit seperti sebelumnya.)
 class AuthScreen extends StatefulWidget {
   final bool initialIsLogin;
-  const AuthScreen({super.key, this.initialIsLogin = true});
+  final AuthService authService;
+  final FirestoreService firestoreService;
+
+  AuthScreen({
+    super.key,
+    this.initialIsLogin = true,
+    AuthService? authService,
+    FirestoreService? firestoreService,
+  }) : authService = authService ?? AuthService(),
+       firestoreService = firestoreService ?? FirestoreService();
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -26,8 +35,8 @@ class _AuthScreenState extends State<AuthScreen>
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
-  final _auth = AuthService();
-  final _fs = FirestoreService();
+  AuthService get _auth => widget.authService;
+  FirestoreService get _fs => widget.firestoreService;
   bool _loading = false;
   bool _obscure = true;
 
@@ -37,10 +46,7 @@ class _AuthScreenState extends State<AuthScreen>
   void initState() {
     super.initState();
     _isLogin = widget.initialIsLogin;
-    _ctl = AnimationController(
-      vsync: this,
-      duration: PitchMotion.screen,
-    );
+    _ctl = AnimationController(vsync: this, duration: PitchMotion.screen);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (PitchMotion.reducedMotion(context)) {
@@ -77,7 +83,10 @@ class _AuthScreenState extends State<AuthScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: DeofootTheme.danger),
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: DeofootTheme.danger,
+          ),
         );
       }
     } finally {
@@ -96,8 +105,9 @@ class _AuthScreenState extends State<AuthScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(e.toString()),
-              backgroundColor: DeofootTheme.danger),
+            content: Text(e.toString()),
+            backgroundColor: DeofootTheme.danger,
+          ),
         );
       }
     } finally {
@@ -122,10 +132,7 @@ class _AuthScreenState extends State<AuthScreen>
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: FadeTransition(
-          opacity: CurvedAnimation(
-            parent: _ctl,
-            curve: PitchMotion.easeOut,
-          ),
+          opacity: CurvedAnimation(parent: _ctl, curve: PitchMotion.easeOut),
           child: Form(
             key: _formKey,
             child: Column(
@@ -182,8 +189,7 @@ class _AuthScreenState extends State<AuthScreen>
                     if (v == null || v.trim().isEmpty) {
                       return 'Email wajib diisi.';
                     }
-                    if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$')
-                        .hasMatch(v.trim())) {
+                    if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(v.trim())) {
                       return 'Format email tidak valid.';
                     }
                     return null;
@@ -197,11 +203,12 @@ class _AuthScreenState extends State<AuthScreen>
                     labelText: 'Password',
                     prefixIcon: const Icon(Icons.lock_outlined),
                     suffixIcon: IconButton(
-                      icon: Icon(_obscure
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined),
-                      onPressed: () =>
-                          setState(() => _obscure = !_obscure),
+                      icon: Icon(
+                        _obscure
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
+                      onPressed: () => setState(() => _obscure = !_obscure),
                     ),
                   ),
                   validator: (v) {
@@ -237,9 +244,11 @@ class _AuthScreenState extends State<AuthScreen>
                   onPressed: _loading
                       ? null
                       : () => setState(() => _isLogin = !_isLogin),
-                  child: Text(_isLogin
-                      ? 'Belum punya akun? Daftar'
-                      : 'Sudah punya akun? Masuk'),
+                  child: Text(
+                    _isLogin
+                        ? 'Belum punya akun? Daftar'
+                        : 'Sudah punya akun? Masuk',
+                  ),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
@@ -251,7 +260,8 @@ class _AuthScreenState extends State<AuthScreen>
                     side: const BorderSide(color: DeofootTheme.line),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(
-                          DeofootTheme.radiusButton),
+                        DeofootTheme.radiusButton,
+                      ),
                     ),
                     minimumSize: const Size(double.infinity, 52),
                   ),

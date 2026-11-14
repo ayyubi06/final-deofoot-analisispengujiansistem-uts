@@ -24,10 +24,7 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    _ctl = AnimationController(
-      vsync: this,
-      duration: PitchMotion.screen,
-    );
+    _ctl = AnimationController(vsync: this, duration: PitchMotion.screen);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (PitchMotion.reducedMotion(context)) {
@@ -91,10 +88,7 @@ class _SplashScreenState extends State<SplashScreen>
                   const SizedBox(height: 8),
                   const Text(
                     'Booking futsal semudah itu.',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.white70,
-                    ),
+                    style: TextStyle(fontSize: 16, color: Colors.white70),
                   ),
                   const Spacer(),
                   PitchButton(
@@ -112,7 +106,8 @@ class _SplashScreenState extends State<SplashScreen>
                         side: const BorderSide(color: Colors.white),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(
-                              DeofootTheme.radiusButton),
+                            DeofootTheme.radiusButton,
+                          ),
                         ),
                         minimumSize: const Size(double.infinity, 52),
                       ),
@@ -130,9 +125,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   void _go(BuildContext context, {required bool isLogin}) {
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => AuthScreen(initialIsLogin: isLogin),
-      ),
+      MaterialPageRoute(builder: (_) => AuthScreen(initialIsLogin: isLogin)),
     );
   }
 }

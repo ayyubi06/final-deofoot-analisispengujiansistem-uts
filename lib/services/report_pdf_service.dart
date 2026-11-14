@@ -1,7 +1,9 @@
 import 'dart:typed_data';
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+
 import '../booking_logic.dart';
 import '../report_logic.dart';
 
@@ -30,30 +32,56 @@ class ReportPdfService {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(36),
         build: (ctx) => [
-          pw.Text('Laporan Deofoot',
-              style: const pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+          pw.Text(
+            'Laporan Deofoot',
+            style: const pw.TextStyle(
+              fontSize: 20,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
           pw.SizedBox(height: 4),
           pw.Text('Periode: ${labelPeriodePdf(labelPeriode)}'),
           pw.Text('Dicetak: ${tanggalIndonesia(tanggalCetak)}'),
           pw.SizedBox(height: 16),
-          pw.Text('Ringkasan', style: const pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+          pw.Text(
+            'Ringkasan',
+            style: const pw.TextStyle(
+              fontSize: 14,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
           pw.SizedBox(height: 6),
           pw.TableHelper.fromTextArray(
-            headers: const ['Jumlah booking (Disetujui)', 'Slot terisi', 'Total pendapatan'],
+            headers: const [
+              'Jumlah booking (Disetujui)',
+              'Slot terisi',
+              'Total pendapatan',
+            ],
             data: [
               [
                 '${lap.jumlahBooking}',
                 '${lap.slotTerisi} jam',
                 fmtRupiah(lap.pendapatan),
-              ]
+              ],
             ],
           ),
           pw.SizedBox(height: 10),
-          pw.Text('Jumlah booking per status',
-              style: const pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+          pw.Text(
+            'Jumlah booking per status',
+            style: const pw.TextStyle(
+              fontSize: 12,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
           pw.SizedBox(height: 4),
           pw.TableHelper.fromTextArray(
-            headers: const ['Disetujui', 'Menunggu', 'Ditolak', 'Dibatalkan', 'Kedaluwarsa'],
+            headers: const [
+              'Disetujui',
+              'Menunggu',
+              'Ditolak',
+              'Dibatalkan',
+              'Kedaluwarsa',
+            ],
             data: [
               [
                 '${lap.jumlahPerStatus['confirmed'] ?? 0}',
@@ -61,11 +89,17 @@ class ReportPdfService {
                 '${lap.jumlahPerStatus['rejected'] ?? 0}',
                 '${lap.jumlahPerStatus['cancelled'] ?? 0}',
                 '${lap.jumlahPerStatus['expired'] ?? 0}',
-              ]
+              ],
             ],
           ),
           pw.SizedBox(height: 16),
-          pw.Text('Per Lapangan', style: const pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+          pw.Text(
+            'Per Lapangan',
+            style: const pw.TextStyle(
+              fontSize: 14,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
           pw.SizedBox(height: 6),
           if (lap.perLapangan.isEmpty)
             pw.Text('Tidak ada booking Disetujui pada periode ini.')
@@ -79,11 +113,17 @@ class ReportPdfService {
                     '${a.jumlahBooking}',
                     '${a.okupansiPersen.toStringAsFixed(1)}%',
                     fmtRupiah(a.pendapatan),
-                  ]
+                  ],
               ],
             ),
           pw.SizedBox(height: 16),
-          pw.Text('Per Tanggal', style: const pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+          pw.Text(
+            'Per Tanggal',
+            style: const pw.TextStyle(
+              fontSize: 14,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
           pw.SizedBox(height: 6),
           if (tanggalUrut.isEmpty)
             pw.Text('Tidak ada data.')
@@ -96,7 +136,7 @@ class ReportPdfService {
                     tanggalIndonesia(DateTime.parse(t)),
                     '${lap.bookingPerTanggal[t] ?? 0}',
                     fmtRupiah(lap.pendapatanPerTanggal[t] ?? 0),
-                  ]
+                  ],
               ],
             ),
           pw.SizedBox(height: 20),

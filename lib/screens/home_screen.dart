@@ -18,7 +18,13 @@ import 'slot_search_screen.dart';
 /// Fungsi tidak berubah dari v0.4.1.
 class HomeScreen extends StatefulWidget {
   final String userEmail;
-  const HomeScreen({super.key, required this.userEmail});
+  final FirestoreService firestoreService;
+
+  HomeScreen({
+    super.key,
+    required this.userEmail,
+    FirestoreService? firestoreService,
+  }) : firestoreService = firestoreService ?? FirestoreService();
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -28,8 +34,18 @@ const _categories = ['Semua', 'Futsal', 'Padel', 'Tenis', 'Mini Soccer'];
 
 const _hari = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 const _bulan = [
-  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+  'Januari',
+  'Februari',
+  'Maret',
+  'April',
+  'Mei',
+  'Juni',
+  'Juli',
+  'Agustus',
+  'September',
+  'Oktober',
+  'November',
+  'Desember',
 ];
 
 String _tanggalId(DateTime d) =>
@@ -115,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final fs = FirestoreService();
+    final fs = widget.firestoreService;
     final today = fmtDate(DateTime.now());
     return Scaffold(
       appBar: AppBar(
@@ -132,7 +148,10 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.search),
             tooltip: 'Cari slot kosong',
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SlotSearchScreen()),
+              MaterialPageRoute(
+                builder: (_) =>
+                    SlotSearchScreen(firestoreService: widget.firestoreService),
+              ),
             ),
           ),
         ],
@@ -155,9 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
           }
           final fields = snap.data ?? [];
           if (fields.isEmpty) {
-            return const Center(
-              child: Text('Data lapangan belum tersedia.'),
-            );
+            return const Center(child: Text('Data lapangan belum tersedia.'));
           }
           // Lapangan nonaktif disembunyikan dari user (Fase C).
           final aktif = fields.where((f) => f.isActive).toList();
@@ -198,7 +215,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     key: ValueKey('field-${shown[i].id}'),
                     id: 'field-${shown[i].id}',
                     index: i,
-                    child: _FieldCard(field: shown[i], date: today),
+                    child: _FieldCard(
+                      field: shown[i],
+                      date: today,
+                      firestoreService: widget.firestoreService,
+                    ),
                   ),
                 ),
             ],
@@ -212,16 +233,23 @@ class _HomeScreenState extends State<HomeScreen> {
 class _FieldCard extends StatelessWidget {
   final Field field;
   final String date;
-  const _FieldCard({required this.field, required this.date});
+  final FirestoreService firestoreService;
+
+  const _FieldCard({
+    required this.field,
+    required this.date,
+    required this.firestoreService,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final fs = FirestoreService();
+    final fs = firestoreService;
     return PitchCard(
       padding: EdgeInsets.zero,
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => ScheduleScreen(field: field),
+          builder: (_) =>
+              ScheduleScreen(field: field, firestoreService: firestoreService),
         ),
       ),
       child: Column(
@@ -262,7 +290,9 @@ class _FieldCard extends StatelessWidget {
                     left: 10,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: field.color,
                         borderRadius: BorderRadius.circular(999),
@@ -300,10 +330,13 @@ class _FieldCard extends StatelessWidget {
                             .length;
                         return Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                            color:
-                                DeofootTheme.pitch700.withValues(alpha: 0.12),
+                            color: DeofootTheme.pitch700.withValues(
+                              alpha: 0.12,
+                            ),
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
