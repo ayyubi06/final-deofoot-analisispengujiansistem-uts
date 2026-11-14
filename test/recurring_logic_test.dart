@@ -193,4 +193,11 @@ void main() {
       expect(s.cancelledMeetingDates, isEmpty);
     });
   });
+
+  group('labelStatusSeri', () {
+    test('rejected dan cancelled', () {
+      expect(labelStatusSeri('rejected'), 'Ditolak');
+      expect(labelStatusSeri('cancelled'), 'Dibatalkan');
+    });
+  });
 }

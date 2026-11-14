@@ -327,4 +327,11 @@ group('bookingTotal & Field dinamis (v0.3)', () {
     expect(monthLabel(DateTime(2026, 8, 1)), 'Agu');
   });
 });
+
+group('dayLabel', () {
+  test('Senin dan Minggu', () {
+    expect(dayLabel(DateTime(2026, 11, 16)), 'Sen');
+    expect(dayLabel(DateTime(2026, 11, 15)), 'Min');
+  });
+});
 }

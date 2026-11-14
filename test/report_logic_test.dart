@@ -183,4 +183,13 @@ void main() {
       expect(namaBulan(12), 'Desember');
     });
   });
+
+  group('rentangPreset pilihan', () {
+    test('pilihan mengembalikan (hari ini, hari ini)', () {
+      final (mulai, akhir) =
+          rentangPreset(JenisRentang.pilihan, DateTime(2026, 11, 14, 15, 30));
+      expect(mulai, DateTime(2026, 11, 14));
+      expect(akhir, DateTime(2026, 11, 14));
+    });
+  });
 }
