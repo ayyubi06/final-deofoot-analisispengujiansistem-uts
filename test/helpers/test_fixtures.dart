@@ -6,7 +6,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 
@@ -27,6 +26,8 @@ class _FakeNotificationDetails extends Fake implements NotificationDetails {}
 
 class _FakeTZDateTime extends Fake implements tz.TZDateTime {}
 
+class _FakeAuthCredential extends Fake implements AuthCredential {}
+
 class TestFixtures {
   static MethodCall? lastPrintingCall;
 
@@ -35,6 +36,7 @@ class TestFixtures {
     registerFallbackValue(_FakeNotificationDetails());
     registerFallbackValue(_FakeTZDateTime());
     registerFallbackValue(AndroidScheduleMode.inexactAllowWhileIdle);
+    registerFallbackValue(_FakeAuthCredential());
   }
 
   static FakeFirebaseFirestore firestore() => FakeFirebaseFirestore();
@@ -70,6 +72,50 @@ class TestFixtures {
       ).thenAnswer((_) async => throw exception);
     }
     return auth;
+  }
+
+  static MockAuth authThatFailsGoogle({required String code, String? message}) {
+    final auth = MockAuth();
+    final exception = FirebaseAuthException(code: code, message: message);
+    when(() => auth.signInWithCredential(any()))
+        .thenAnswer((_) async => throw exception);
+    return auth;
+  }
+
+  static void installGoogleSignInMock({bool cancelled = false}) {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/google_sign_in'),
+          (call) async {
+            switch (call.method) {
+              case 'init':
+                return null;
+              case 'signIn':
+                if (cancelled) {
+                  throw PlatformException(code: 'sign_in_canceled');
+                }
+                return {
+                  'email': 'google@example.test',
+                  'id': 'google-user',
+                  'displayName': 'Google User',
+                  'idToken': 'id-token',
+                };
+              case 'getTokens':
+                return {'accessToken': 'access-token', 'idToken': 'id-token'};
+              default:
+                return null;
+            }
+          },
+        );
+  }
+
+  static void removeGoogleSignInMock() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/google_sign_in'),
+          null,
+        );
   }
 
   static Map<String, dynamic> fieldData({
@@ -114,8 +160,8 @@ class TestFixtures {
     'proofBase64': proofBase64,
     'totalPrice': totalPrice,
     'pricePerHour': pricePerHour,
-    if (seriesId != null) 'seriesId': seriesId,
-    if (seriesIndex != null) 'seriesIndex': seriesIndex,
+    'seriesId': ?seriesId,
+    'seriesIndex': ?seriesIndex,
     'whatsapp': whatsapp,
     'createdAt': Timestamp.fromDate(createdAt ?? DateTime(2026, 11, 14, 8)),
   };
@@ -275,6 +321,58 @@ class TestFixtures {
       ),
     ).thenAnswer((_) async {});
     return plugin;
+  }
+
+  static void verifyScheduled(MockNotificationPlugin plugin, {int count = 1}) {
+    verify(
+      () => plugin.zonedSchedule(
+        id: any(named: 'id'),
+        title: any(named: 'title'),
+        body: any(named: 'body'),
+        scheduledDate: any(named: 'scheduledDate'),
+        notificationDetails: any(named: 'notificationDetails'),
+        androidScheduleMode: any(named: 'androidScheduleMode'),
+        payload: any(named: 'payload'),
+      ),
+    ).called(count);
+  }
+
+  static void verifyNotScheduled(MockNotificationPlugin plugin) {
+    verifyNever(
+      () => plugin.zonedSchedule(
+        id: any(named: 'id'),
+        title: any(named: 'title'),
+        body: any(named: 'body'),
+        scheduledDate: any(named: 'scheduledDate'),
+        notificationDetails: any(named: 'notificationDetails'),
+        androidScheduleMode: any(named: 'androidScheduleMode'),
+        payload: any(named: 'payload'),
+      ),
+    );
+  }
+
+  static void verifyShown(MockNotificationPlugin plugin, {int count = 1}) {
+    verify(
+      () => plugin.show(
+        id: any(named: 'id'),
+        title: any(named: 'title'),
+        body: any(named: 'body'),
+        notificationDetails: any(named: 'notificationDetails'),
+        payload: any(named: 'payload'),
+      ),
+    ).called(count);
+  }
+
+  static void verifyNotShown(MockNotificationPlugin plugin) {
+    verifyNever(
+      () => plugin.show(
+        id: any(named: 'id'),
+        title: any(named: 'title'),
+        body: any(named: 'body'),
+        notificationDetails: any(named: 'notificationDetails'),
+        payload: any(named: 'payload'),
+      ),
+    );
   }
 
   static MockAndroidNotificationPlugin androidNotificationPlugin() {

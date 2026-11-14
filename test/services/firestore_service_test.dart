@@ -281,6 +281,21 @@ void main() {
     });
   });
 
+  test('conflict exceptions expose useful messages', () {
+    final bookingConflict = BookingConflictException('Slot sudah terisi.');
+    expect(bookingConflict.toString(), 'Slot sudah terisi.');
+
+    final seriesConflict = SeriesConflictException([
+      '2026-11-18',
+      '2026-11-25',
+    ]);
+    expect(
+      seriesConflict.message,
+      'Slot bentrok pada 2 tanggal: 2026-11-18, 2026-11-25',
+    );
+    expect(seriesConflict.toString(), seriesConflict.message);
+  });
+
   group('subscription series', () {
     test('queries user and pending series in their specified order', () async {
       await TestFixtures.seedSeries(

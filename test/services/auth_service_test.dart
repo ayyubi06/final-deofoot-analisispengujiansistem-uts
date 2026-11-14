@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import '../helpers/test_fixtures.dart';
 
 void main() {
+  setUpAll(TestFixtures.registerFallbackValues);
+
   group('AuthService with MockFirebaseAuth', () {
     test('exposes current user and auth state', () async {
       final auth = TestFixtures.auth();
@@ -91,6 +93,46 @@ void main() {
         await expectLater(
           AuthService(auth: auth).register('user@example.test', 'password'),
           throwsA('Gagal: unexpected-code'),
+        );
+      },
+    );
+
+    test('returns null when the user cancels Google sign-in', () async {
+      TestFixtures.installGoogleSignInMock(cancelled: true);
+      addTearDown(TestFixtures.removeGoogleSignInMock);
+
+      expect(
+        await AuthService(auth: TestFixtures.auth()).signInWithGoogle(),
+        isNull,
+      );
+    });
+
+    test(
+      'signs in with Google credentials and returns the Firebase user',
+      () async {
+        TestFixtures.installGoogleSignInMock();
+        addTearDown(TestFixtures.removeGoogleSignInMock);
+        final auth = TestFixtures.auth();
+
+        final user = await AuthService(auth: auth).signInWithGoogle();
+
+        expect(user?.uid, 'user-1');
+        expect(auth.currentUser?.email, 'user@example.test');
+      },
+    );
+
+    test(
+      'maps Firebase errors returned by Google credential sign-in',
+      () async {
+        TestFixtures.installGoogleSignInMock();
+        addTearDown(TestFixtures.removeGoogleSignInMock);
+        final auth = TestFixtures.authThatFailsGoogle(
+          code: 'invalid-credential',
+        );
+
+        await expectLater(
+          AuthService(auth: auth).signInWithGoogle(),
+          throwsA('Email atau password salah.'),
         );
       },
     );
