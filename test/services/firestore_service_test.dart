@@ -4,517 +4,515 @@ import 'package:deofoot/services/firestore_service.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../helpers/test_fixtures.dart';
+import '../helpers/fase2_helpers.dart';
 
 void main() {
-  late FakeFirebaseFirestore db;
+  late FakeFirebaseFirestore fake;
   late FirestoreService service;
 
   setUp(() {
-    db = TestFixtures.firestore();
-    service = FirestoreService(db: db);
+    fake = FakeFirebaseFirestore();
+    service = FirestoreService(db: fake);
   });
 
-  group('field and account access', () {
-    test('returns fields and supports admin field writes', () async {
-      await TestFixtures.seedField(db);
-      expect((await service.watchFields().first).single.id, 'field-1');
+  group('fields', () {
+    test('watchFields mengembalikan lapangan yang di-seed', () async {
+      await seedField(fake, id: 'l1', name: 'Lapangan 1');
+      await seedField(fake, id: 'p1', name: 'Padel 1', price: 250000);
+      final fields = await service.watchFields().first;
+      expect(fields.map((f) => f.id), containsAll(['l1', 'p1']));
+      expect(fields.firstWhere((f) => f.id == 'p1').pricePerHour, 250000);
+    });
 
-      final field = Field.fromMap(
-        'field-2',
-        TestFixtures.fieldData(name: 'Lapangan Baru'),
-      );
+    test('createField + updateField + setFieldActive', () async {
+      final field = Field(id: 't1', name: 'Tenis 1', pricePerHour: 150000);
       await service.createField(field);
+      var doc = await fake.collection('fields').doc('t1').get();
+      expect(doc.data()?['name'], 'Tenis 1');
       await service.updateField(
-        Field.fromMap(
-          'field-2',
-          TestFixtures.fieldData(name: 'Lapangan Update', pricePerHour: 150000),
-        ),
+        Field(id: 't1', name: 'Tenis 1 Baru', pricePerHour: 175000),
       );
-      await service.setFieldActive('field-2', false);
+      doc = await fake.collection('fields').doc('t1').get();
+      expect(doc.data()?['name'], 'Tenis 1 Baru');
+      expect(doc.data()?['pricePerHour'], 175000);
+      await service.setFieldActive('t1', false);
+      doc = await fake.collection('fields').doc('t1').get();
+      expect(doc.data()?['isActive'], false);
+    });
+  });
 
-      final updated = (await service.watchFields().first).singleWhere(
-        (item) => item.id == 'field-2',
-      );
-      expect(updated.name, 'Lapangan Update');
-      expect(updated.pricePerHour, 150000);
-      expect(updated.isActive, isFalse);
+  group('config & users', () {
+    test('getPaymentConfig dari dokumen config', () async {
+      await seedPaymentConfig(fake);
+      final cfg = await service.getPaymentConfig();
+      expect(cfg['danaNumber'], '081234567890');
+      expect(cfg['danaName'], 'Deofoot');
+    });
+
+    test('getPaymentConfig tanpa dokumen -> tanda -', () async {
+      final cfg = await service.getPaymentConfig();
+      expect(cfg['danaNumber'], '-');
+      expect(cfg['danaName'], '-');
+    });
+
+    test('isAdmin true/false/tanpa dokumen', () async {
+      await seedUser(fake, uid: 'admin1', isAdmin: true);
+      await seedUser(fake, uid: 'u1', isAdmin: false);
+      expect(await service.isAdmin('admin1'), true);
+      expect(await service.isAdmin('u1'), false);
+      expect(await service.isAdmin('tidak-ada'), false);
     });
 
     test(
-      'reads payment config and supplies defaults for absent values',
+      'ensureUserDoc membuat dokumen baru, tidak menimpa yang ada',
       () async {
-        expect(await service.getPaymentConfig(), {
-          'danaNumber': '-',
-          'danaName': '-',
-        });
-        await TestFixtures.seedPaymentConfig(db);
-        expect(await service.getPaymentConfig(), {
-          'danaNumber': '081234567890',
-          'danaName': 'Deofoot',
-        });
+        await service.ensureUserDoc('baru1', 'baru@test.com');
+        var doc = await fake.collection('users').doc('baru1').get();
+        expect(doc.exists, true);
+        expect(doc.data()?['email'], 'baru@test.com');
+        expect(doc.data()?['isAdmin'], false);
+
+        await seedUser(fake, uid: 'lama1', isAdmin: true);
+        await service.ensureUserDoc('lama1', 'lain@test.com');
+        doc = await fake.collection('users').doc('lama1').get();
+        expect(doc.data()?['isAdmin'], true);
+        expect(doc.data()?['email'], 'u1@test.com');
       },
     );
+  });
 
-    test('checks admin status and creates a user document only once', () async {
-      expect(await service.isAdmin('new-user'), isFalse);
-      await service.ensureUserDoc('new-user', 'new@example.test');
-      expect(await service.isAdmin('new-user'), isFalse);
+  group('watch bookings', () {
+    test('watchBookings memfilter lapangan + tanggal', () async {
+      await seedBooking(fake, id: 'b1', fieldId: 'l1', date: '2026-11-20');
+      await seedBooking(
+        fake,
+        id: 'b2',
+        fieldId: 'l1',
+        date: '2026-11-20',
+        startTime: '20:00',
+        endTime: '21:00',
+      );
+      await seedBooking(fake, id: 'b3', fieldId: 'l1', date: '2026-11-21');
+      await seedBooking(fake, id: 'b4', fieldId: 'p1', date: '2026-11-20');
+      final list = await service.watchBookings('l1', '2026-11-20').first;
+      expect(list.map((b) => b.id), containsAll(['b1', 'b2']));
+      expect(list.length, 2);
+    });
 
-      await db.collection('users').doc('admin').set({'isAdmin': true});
-      expect(await service.isAdmin('admin'), isTrue);
-      await service.ensureUserDoc('admin', 'changed@example.test');
-      expect(
-        (await db.collection('users').doc('admin').get()).data()?['email'],
-        isNull,
-      );
-      expect(
-        (await db.collection('users').doc('new-user').get()).data()?['email'],
-        'new@example.test',
-      );
+    test('watchBookingsByDate semua lapangan satu tanggal', () async {
+      await seedBooking(fake, id: 'b1', fieldId: 'l1', date: '2026-11-20');
+      await seedBooking(fake, id: 'b2', fieldId: 'p1', date: '2026-11-20');
+      await seedBooking(fake, id: 'b3', fieldId: 'l1', date: '2026-11-21');
+      final list = await service.watchBookingsByDate('2026-11-20').first;
+      expect(list.length, 2);
+    });
+
+    test('watchMyBookings milik user, urut createdAt menurun', () async {
+      final lama = DateTime.now().subtract(const Duration(hours: 2));
+      final baru = DateTime.now();
+      await seedBooking(fake, id: 'b-lama', userId: 'u1', createdAt: lama);
+      await seedBooking(fake, id: 'b-baru', userId: 'u1', createdAt: baru);
+      await seedBooking(fake, id: 'b-lain', userId: 'u2', createdAt: baru);
+      final list = await service.watchMyBookings('u1').first;
+      expect(list.map((b) => b.id).toList(), ['b-baru', 'b-lama']);
+    });
+
+    test('watchPending hanya pending, urut createdAt menaik', () async {
+      final lama = DateTime.now().subtract(const Duration(hours: 2));
+      final baru = DateTime.now();
+      await seedBooking(fake, id: 'b-baru', status: 'pending', createdAt: baru);
+      await seedBooking(fake, id: 'b-lama', status: 'pending', createdAt: lama);
+      await seedBooking(fake, id: 'b-ok', status: 'confirmed', createdAt: lama);
+      final list = await service.watchPending().first;
+      expect(list.map((b) => b.id).toList(), ['b-lama', 'b-baru']);
+    });
+
+    test('watchBookingsInRange rentang inklusif', () async {
+      await seedBooking(fake, id: 'b1', date: '2026-11-18');
+      await seedBooking(fake, id: 'b2', date: '2026-11-20');
+      await seedBooking(fake, id: 'b3', date: '2026-11-25');
+      final list = await service
+          .watchBookingsInRange('2026-11-19', '2026-11-21')
+          .first;
+      expect(list.map((b) => b.id).toList(), ['b2']);
+    });
+
+    test('watchBookingsToday hanya tanggal hari ini', () async {
+      final hariIni = fmtDate(DateTime.now());
+      final kemarin = fmtDate(DateTime.now().subtract(const Duration(days: 1)));
+      await seedBooking(fake, id: 'b1', date: hariIni);
+      await seedBooking(fake, id: 'b2', date: kemarin);
+      final list = await service.watchBookingsToday().first;
+      expect(list.map((b) => b.id).toList(), ['b1']);
     });
   });
 
-  group('booking queries', () {
-    test('filters by field and date, or by date across all fields', () async {
-      await TestFixtures.seedBooking(db, id: 'target');
-      await TestFixtures.seedBooking(
-        db,
-        id: 'other-field',
-        data: TestFixtures.bookingData(fieldId: 'field-2'),
-      );
-      await TestFixtures.seedBooking(
-        db,
-        id: 'other-day',
-        data: TestFixtures.bookingData(date: '2026-11-19'),
-      );
-
-      expect(
-        (await service.watchBookings('field-1', '2026-11-18').first).map(
-          (item) => item.id,
-        ),
-        ['target'],
-      );
-      expect(
-        (await service.watchBookingsByDate('2026-11-18').first).map(
-          (item) => item.id,
-        ),
-        containsAll(['target', 'other-field']),
-      );
-    });
-
-    test('sorts user bookings newest first and pending oldest first', () async {
-      await TestFixtures.seedBooking(
-        db,
-        id: 'older',
-        data: TestFixtures.bookingData(createdAt: DateTime(2026, 11, 12)),
-      );
-      await TestFixtures.seedBooking(
-        db,
-        id: 'newer',
-        data: TestFixtures.bookingData(createdAt: DateTime(2026, 11, 13)),
-      );
-      await TestFixtures.seedBooking(
-        db,
-        id: 'different-user',
-        data: TestFixtures.bookingData(userId: 'user-2'),
-      );
-
-      expect(
-        (await service.watchMyBookings('user-1').first).map((item) => item.id),
-        ['newer', 'older'],
-      );
-      expect((await service.watchPending().first).map((item) => item.id), [
-        'older',
-        'newer',
-        'different-user',
-      ]);
-    });
-
-    test('queries inclusive report ranges and today bookings', () async {
-      await TestFixtures.seedBooking(
-        db,
-        id: 'inside-start',
-        data: TestFixtures.bookingData(date: '2026-11-17'),
-      );
-      await TestFixtures.seedBooking(
-        db,
-        id: 'inside-end',
-        data: TestFixtures.bookingData(date: '2026-11-19'),
-      );
-      await TestFixtures.seedBooking(
-        db,
-        id: 'outside',
-        data: TestFixtures.bookingData(date: '2026-11-20'),
-      );
-      final today = fmtDate(DateTime.now());
-      await TestFixtures.seedBooking(
-        db,
-        id: 'today',
-        data: TestFixtures.bookingData(date: today),
-      );
-
-      expect(
-        (await service.watchBookingsInRange('2026-11-17', '2026-11-19').first)
-            .map((item) => item.id),
-        containsAll(['inside-start', 'inside-end']),
-      );
-      expect(
-        (await service.watchBookingsToday().first).map((item) => item.id),
-        ['today'],
-      );
-    });
-  });
-
-  group('single booking mutations', () {
-    test('creates a booking with snapshot fields in a transaction', () async {
+  group('createBooking', () {
+    test('sukses menulis booking pending dan mengembalikan id', () async {
       final id = await service.createBooking(
-        userId: 'user-1',
-        userEmail: 'user@example.test',
-        fieldId: 'field-1',
+        userId: 'u1',
+        userEmail: 'u1@test.com',
+        fieldId: 'l1',
         fieldName: 'Lapangan 1',
-        date: '2026-11-18',
-        startHour: 9,
-        endHour: 11,
-        whatsapp: '081234567890',
-        proofBase64: 'encoded',
+        date: '2026-11-20',
+        startHour: 19,
+        endHour: 21,
+        whatsapp: '08123456789',
+        proofBase64: 'base64bukti',
         totalPrice: 240000,
         pricePerHour: 120000,
       );
-      final booking = Booking.fromDoc(
-        await db.collection('bookings').doc(id).get(),
-      );
-      expect(booking.startTime, '09:00');
-      expect(booking.endTime, '11:00');
-      expect(booking.status, 'pending');
-      expect(booking.totalPrice, 240000);
-      expect(booking.pricePerHour, 120000);
+      expect(id, isNotEmpty);
+      final doc = await fake.collection('bookings').doc(id).get();
+      expect(doc.data()?['status'], 'pending');
+      expect(doc.data()?['startTime'], '19:00');
+      expect(doc.data()?['endTime'], '21:00');
+      expect(doc.data()?['totalPrice'], 240000);
+      expect(doc.data()?['pricePerHour'], 120000);
     });
 
-    test('rejects a conflicting booking without writing a document', () async {
-      await TestFixtures.seedBooking(
-        db,
-        data: TestFixtures.bookingData(
-          date: '2026-11-18',
-          startTime: '09:00',
-          endTime: '10:00',
-        ),
+    test('bentrok melempar BookingConflictException', () async {
+      await seedBooking(
+        fake,
+        id: 'b1',
+        fieldId: 'l1',
+        date: '2026-11-20',
+        startTime: '19:00',
+        endTime: '20:00',
       );
-      await expectLater(
-        service.createBooking(
-          userId: 'user-2',
-          userEmail: 'other@example.test',
-          fieldId: 'field-1',
+      try {
+        await service.createBooking(
+          userId: 'u2',
+          userEmail: 'u2@test.com',
+          fieldId: 'l1',
           fieldName: 'Lapangan 1',
-          date: '2026-11-18',
-          startHour: 9,
-          endHour: 10,
-          whatsapp: '081234567890',
-          proofBase64: 'encoded',
-          totalPrice: 120000,
+          date: '2026-11-20',
+          startHour: 19,
+          endHour: 21,
+          whatsapp: '0812',
+          proofBase64: 'x',
+          totalPrice: 240000,
           pricePerHour: 120000,
-        ),
-        throwsA(isA<BookingConflictException>()),
-      );
-      expect((await db.collection('bookings').get()).docs, hasLength(1));
+        );
+        fail('seharusnya melempar BookingConflictException');
+      } on BookingConflictException catch (e) {
+        expect(e.toString(), contains('Slot sudah dibooking'));
+      }
+      final snap = await fake.collection('bookings').get();
+      expect(snap.docs.length, 1);
     });
 
-    test('expires only pending bookings older than thirty minutes', () async {
-      await TestFixtures.seedBooking(
-        db,
-        id: 'stale',
-        data: TestFixtures.bookingData(
-          createdAt: DateTime.now().subtract(const Duration(minutes: 31)),
-        ),
+    test('slot bersebelahan (tanpa tumpang tindih) lolos', () async {
+      await seedBooking(
+        fake,
+        id: 'b1',
+        fieldId: 'l1',
+        date: '2026-11-20',
+        startTime: '19:00',
+        endTime: '20:00',
       );
-      await TestFixtures.seedBooking(
-        db,
-        id: 'recent',
-        data: TestFixtures.bookingData(
-          createdAt: DateTime.now().subtract(const Duration(minutes: 29)),
-        ),
+      final id = await service.createBooking(
+        userId: 'u2',
+        userEmail: 'u2@test.com',
+        fieldId: 'l1',
+        fieldName: 'Lapangan 1',
+        date: '2026-11-20',
+        startHour: 20,
+        endHour: 21,
+        whatsapp: '0812',
+        proofBase64: 'x',
+        totalPrice: 120000,
+        pricePerHour: 120000,
       );
-      await TestFixtures.seedBooking(
-        db,
-        id: 'confirmed',
-        data: TestFixtures.bookingData(
-          status: 'confirmed',
-          createdAt: DateTime.now().subtract(const Duration(hours: 1)),
-        ),
-      );
-      await TestFixtures.seedBooking(
-        db,
-        id: 'no-timestamp',
-        data: TestFixtures.bookingData()..remove('createdAt'),
-      );
+      expect(id, isNotEmpty);
+    });
+  });
 
-      expect(await service.expireStalePendings(), 1);
-      expect(
-        (await db.collection('bookings').doc('stale').get()).data()?['status'],
-        'expired',
+  group('expireStalePendings & status', () {
+    test('expireStalePendings hanya meng-expire pending lama', () async {
+      final now = DateTime.now();
+      await seedBooking(
+        fake,
+        id: 'b-lama',
+        status: 'pending',
+        createdAt: now.subtract(const Duration(minutes: 40)),
       );
-      expect(
-        (await db.collection('bookings').doc('recent').get()).data()?['status'],
-        'pending',
+      await seedBooking(
+        fake,
+        id: 'b-baru',
+        status: 'pending',
+        createdAt: now.subtract(const Duration(minutes: 5)),
       );
+      await seedBooking(
+        fake,
+        id: 'b-ok',
+        status: 'confirmed',
+        createdAt: now.subtract(const Duration(minutes: 40)),
+      );
+      await seedBooking(
+        fake,
+        id: 'b-tanpa-created',
+        status: 'pending',
+        omitCreatedAt: true,
+      );
+      final n = await service.expireStalePendings();
+      expect(n, 1);
+      final lama = await fake.collection('bookings').doc('b-lama').get();
+      expect(lama.data()?['status'], 'expired');
+      final baru = await fake.collection('bookings').doc('b-baru').get();
+      expect(baru.data()?['status'], 'pending');
+      final tanpa = await fake
+          .collection('bookings')
+          .doc('b-tanpa-created')
+          .get();
+      expect(tanpa.data()?['status'], 'pending');
     });
 
-    test('cancels bookings and restricts admin status values', () async {
-      await TestFixtures.seedBooking(db);
-      await service.cancelBooking('booking-1');
-      expect(
-        (await db.collection('bookings').doc('booking-1').get())
-            .data()?['status'],
-        'cancelled',
-      );
-      await service.setBookingStatus('booking-1', 'confirmed');
-      expect(
-        (await db.collection('bookings').doc('booking-1').get())
-            .data()?['status'],
-        'confirmed',
-      );
-      await service.setBookingStatus('booking-1', 'rejected');
+    test('cancelBooking mengubah status', () async {
+      await seedBooking(fake, id: 'b1', status: 'confirmed');
+      await service.cancelBooking('b1');
+      final doc = await fake.collection('bookings').doc('b1').get();
+      expect(doc.data()?['status'], 'cancelled');
+    });
+
+    test('setBookingStatus confirmed/rejected, status lain ditolak', () async {
+      await seedBooking(fake, id: 'b1', status: 'pending');
+      await service.setBookingStatus('b1', 'confirmed');
+      var doc = await fake.collection('bookings').doc('b1').get();
+      expect(doc.data()?['status'], 'confirmed');
+      await service.setBookingStatus('b1', 'rejected');
+      doc = await fake.collection('bookings').doc('b1').get();
+      expect(doc.data()?['status'], 'rejected');
       await expectLater(
-        service.setBookingStatus('booking-1', 'pending'),
+        () => service.setBookingStatus('b1', 'ngawur'),
         throwsArgumentError,
       );
     });
   });
 
-  test('conflict exceptions expose useful messages', () {
-    final bookingConflict = BookingConflictException('Slot sudah terisi.');
-    expect(bookingConflict.toString(), 'Slot sudah terisi.');
-
-    final seriesConflict = SeriesConflictException([
-      '2026-11-18',
-      '2026-11-25',
-    ]);
-    expect(
-      seriesConflict.message,
-      'Slot bentrok pada 2 tanggal: 2026-11-18, 2026-11-25',
-    );
-    expect(seriesConflict.toString(), seriesConflict.message);
-  });
-
-  group('subscription series', () {
-    test('queries user and pending series in their specified order', () async {
-      await TestFixtures.seedSeries(
-        db,
-        id: 'old',
-        data: TestFixtures.seriesData(createdAt: DateTime(2026, 11, 12)),
-      );
-      await TestFixtures.seedSeries(
-        db,
-        id: 'new',
-        data: TestFixtures.seriesData(createdAt: DateTime(2026, 11, 13)),
-      );
-      await TestFixtures.seedSeries(
-        db,
-        id: 'other-user',
-        data: TestFixtures.seriesData(userId: 'user-2'),
-      );
-
-      expect(
-        (await service.watchMySeries('user-1').first).map((item) => item.id),
-        ['new', 'old'],
-      );
-      expect(
-        (await service.watchPendingSeries().first).map((item) => item.id),
-        ['old', 'new', 'other-user'],
-      );
-    });
-
-    test('queries bookings attached to a series', () async {
-      await TestFixtures.seedBooking(
-        db,
-        id: 'series-booking',
-        data: TestFixtures.bookingData(seriesId: 'series-1'),
-      );
-      await TestFixtures.seedBooking(db, id: 'regular-booking');
-      expect(
-        (await service.watchBookingsBySeries('series-1').first).map(
-          (item) => item.id,
-        ),
-        ['series-booking'],
-      );
-    });
-
-    test('creates a series and meeting bookings atomically', () async {
-      final dates = ['2026-11-18', '2026-11-25'];
-      final id = await service.createSeries(
-        userId: 'user-1',
-        userEmail: 'user@example.test',
-        fieldId: 'field-1',
-        fieldName: 'Lapangan 1',
-        meetingDates: dates,
-        startHour: 19,
-        endHour: 21,
-        whatsapp: '081234567890',
-        proofBase64: 'encoded',
-        pricePerHour: 120000,
-      );
-
-      final series = SubscriptionSeries.fromDoc(
-        await db.collection('subscriptions').doc(id).get(),
-      );
-      final bookings = (await service.watchBookingsBySeries(id).first)
-        ..sort((a, b) => a.seriesIndex!.compareTo(b.seriesIndex!));
-      expect(series.meetingsTotal, 2);
-      expect(series.totalPerMeeting, 240000);
-      expect(series.weekday, DateTime.wednesday);
-      expect(bookings.map((item) => item.seriesIndex), [1, 2]);
-      expect(bookings.map((item) => item.proofBase64), [null, null]);
-    });
-
+  group('seri langganan', () {
     test(
-      'does not partially create a series when one date conflicts',
+      'watchMySeries + watchPendingSeries + watchBookingsBySeries',
       () async {
-        await TestFixtures.seedBooking(
-          db,
-          data: TestFixtures.bookingData(
-            date: '2026-11-25',
-            startTime: '19:00',
-            endTime: '20:00',
-          ),
+        final lama = DateTime.now().subtract(const Duration(hours: 2));
+        final baru = DateTime.now();
+        await seedSeries(
+          fake,
+          id: 's-lama',
+          userId: 'u1',
+          status: 'pending',
+          createdAt: lama,
         );
-        await expectLater(
-          service.createSeries(
-            userId: 'user-1',
-            userEmail: 'user@example.test',
-            fieldId: 'field-1',
-            fieldName: 'Lapangan 1',
-            meetingDates: ['2026-11-18', '2026-11-25'],
-            startHour: 19,
-            endHour: 20,
-            whatsapp: '081234567890',
-            proofBase64: 'encoded',
-            pricePerHour: 120000,
-          ),
-          throwsA(isA<SeriesConflictException>()),
+        await seedSeries(
+          fake,
+          id: 's-baru',
+          userId: 'u1',
+          status: 'confirmed',
+          createdAt: baru,
         );
-        expect((await db.collection('subscriptions').get()).docs, isEmpty);
-        expect((await db.collection('bookings').get()).docs, hasLength(1));
+        await seedSeries(
+          fake,
+          id: 's-lain',
+          userId: 'u2',
+          status: 'pending',
+          createdAt: baru,
+        );
+        await seedBooking(fake, id: 'b1', seriesId: 's-lama', seriesIndex: 1);
+        await seedBooking(fake, id: 'b2', seriesId: 's-lama', seriesIndex: 2);
+        await seedBooking(fake, id: 'b3', seriesId: 's-baru', seriesIndex: 1);
+
+        final milikku = await service.watchMySeries('u1').first;
+        expect(milikku.map((s) => s.id).toList(), ['s-baru', 's-lama']);
+        final pending = await service.watchPendingSeries().first;
+        expect(pending.map((s) => s.id).toList(), ['s-lama', 's-lain']);
+        final pertemuan = await service.watchBookingsBySeries('s-lama').first;
+        expect(pertemuan.length, 2);
       },
     );
 
-    test('updates series and pending meetings in one batch', () async {
-      await TestFixtures.seedSeries(db);
-      await TestFixtures.seedBooking(
-        db,
-        id: 'pending-meeting',
-        data: TestFixtures.bookingData(seriesId: 'series-1'),
+    test('createSeries sukses: seri + 2 pertemuan tertulis atomik', () async {
+      final id = await service.createSeries(
+        userId: 'u1',
+        userEmail: 'u1@test.com',
+        fieldId: 'l1',
+        fieldName: 'Lapangan 1',
+        meetingDates: ['2026-11-21', '2026-11-28'],
+        startHour: 19,
+        endHour: 20,
+        whatsapp: '0812',
+        proofBase64: 'bukti',
+        pricePerHour: 120000,
       );
-      await TestFixtures.seedBooking(
-        db,
-        id: 'cancelled-meeting',
-        data: TestFixtures.bookingData(
-          seriesId: 'series-1',
-          status: 'cancelled',
-        ),
-      );
-      await service.setSeriesStatus('series-1', 'confirmed');
+      expect(id, isNotEmpty);
+      final seri = await fake.collection('subscriptions').doc(id).get();
+      expect(seri.data()?['status'], 'pending');
+      expect(seri.data()?['meetingsTotal'], 2);
+      expect(seri.data()?['totalPerMeeting'], 120000);
+      final pertemuan = await fake
+          .collection('bookings')
+          .where('seriesId', isEqualTo: id)
+          .get();
+      expect(pertemuan.docs.length, 2);
+      final idx =
+          pertemuan.docs.map((d) => d.data()['seriesIndex'] as int).toList()
+            ..sort();
+      expect(idx, [1, 2]);
+      expect(pertemuan.docs.first.data()['proofBase64'], isNull);
+    });
 
-      expect(
-        (await db.collection('subscriptions').doc('series-1').get())
-            .data()?['status'],
-        'confirmed',
+    test('createSeries bentrok: tidak ada yang tertulis', () async {
+      await seedBooking(
+        fake,
+        id: 'b1',
+        fieldId: 'l1',
+        date: '2026-11-28',
+        startTime: '19:00',
+        endTime: '20:00',
       );
-      expect(
-        (await db.collection('bookings').doc('pending-meeting').get())
-            .data()?['status'],
-        'confirmed',
+      try {
+        await service.createSeries(
+          userId: 'u1',
+          userEmail: 'u1@test.com',
+          fieldId: 'l1',
+          fieldName: 'Lapangan 1',
+          meetingDates: ['2026-11-21', '2026-11-28'],
+          startHour: 19,
+          endHour: 20,
+          whatsapp: '0812',
+          proofBase64: 'bukti',
+          pricePerHour: 120000,
+        );
+        fail('seharusnya melempar SeriesConflictException');
+      } on SeriesConflictException catch (e) {
+        expect(e.tanggalKonflik, ['2026-11-28']);
+        expect(e.message, contains('2026-11-28'));
+        expect(e.toString(), contains('2026-11-28'));
+      }
+      final seri = await fake.collection('subscriptions').get();
+      expect(seri.docs, isEmpty);
+      final bookings = await fake.collection('bookings').get();
+      expect(bookings.docs.length, 1);
+    });
+
+    test('setSeriesStatus atomik: seri + pertemuan pending berubah', () async {
+      await seedSeries(fake, id: 's1', status: 'pending');
+      await seedBooking(
+        fake,
+        id: 'b1',
+        seriesId: 's1',
+        seriesIndex: 1,
+        status: 'pending',
       );
-      expect(
-        (await db.collection('bookings').doc('cancelled-meeting').get())
-            .data()?['status'],
-        'cancelled',
+      await seedBooking(
+        fake,
+        id: 'b2',
+        seriesId: 's1',
+        seriesIndex: 2,
+        status: 'pending',
       );
+      await seedBooking(
+        fake,
+        id: 'b3',
+        seriesId: 's1',
+        seriesIndex: 3,
+        status: 'cancelled',
+      );
+      await service.setSeriesStatus('s1', 'confirmed');
+      final seri = await fake.collection('subscriptions').doc('s1').get();
+      expect(seri.data()?['status'], 'confirmed');
+      final b1 = await fake.collection('bookings').doc('b1').get();
+      expect(b1.data()?['status'], 'confirmed');
+      final b3 = await fake.collection('bookings').doc('b3').get();
+      expect(b3.data()?['status'], 'cancelled');
       await expectLater(
-        service.setSeriesStatus('series-1', 'pending'),
+        () => service.setSeriesStatus('s1', 'ngawur'),
         throwsArgumentError,
       );
     });
 
-    test('cancels one meeting and records its date', () async {
-      await TestFixtures.seedSeries(db);
-      await TestFixtures.seedBooking(
-        db,
-        id: 'meeting',
-        data: TestFixtures.bookingData(seriesId: 'series-1'),
-      );
-      await service.cancelSeriesMeeting(
-        bookingId: 'meeting',
-        seriesId: 'series-1',
-        date: '2026-11-18',
-      );
-      expect(
-        (await db.collection('bookings').doc('meeting').get())
-            .data()?['status'],
-        'cancelled',
-      );
-      expect(
-        (await db.collection('subscriptions').doc('series-1').get())
-            .data()?['cancelledMeetingDates'],
-        ['2026-11-18'],
-      );
-    });
-
-    test('cancels only remaining confirmed meetings', () async {
-      final futureDate = fmtDate(DateTime.now().add(const Duration(days: 3)));
-      final pastDate = fmtDate(
-        DateTime.now().subtract(const Duration(days: 3)),
-      );
-      await TestFixtures.seedSeries(
-        db,
-        data: TestFixtures.seriesData(status: 'confirmed'),
-      );
-      await TestFixtures.seedBooking(
-        db,
-        id: 'future',
-        data: TestFixtures.bookingData(
-          date: futureDate,
+    test(
+      'cancelSeriesMeeting membatalkan satu pertemuan + mencatat tanggal',
+      () async {
+        await seedSeries(
+          fake,
+          id: 's1',
           status: 'confirmed',
-          seriesId: 'series-1',
-        ),
-      );
-      await TestFixtures.seedBooking(
-        db,
-        id: 'past',
-        data: TestFixtures.bookingData(
-          date: pastDate,
+          meetingDates: ['2026-11-21', '2026-11-28'],
+        );
+        await seedBooking(
+          fake,
+          id: 'b1',
+          seriesId: 's1',
+          seriesIndex: 1,
+          date: '2026-11-21',
           status: 'confirmed',
-          seriesId: 'series-1',
-        ),
-      );
-      await TestFixtures.seedBooking(
-        db,
-        id: 'pending',
-        data: TestFixtures.bookingData(
-          date: futureDate,
-          status: 'pending',
-          seriesId: 'series-1',
-        ),
-      );
+        );
+        await seedBooking(
+          fake,
+          id: 'b2',
+          seriesId: 's1',
+          seriesIndex: 2,
+          date: '2026-11-28',
+          status: 'confirmed',
+        );
+        await service.cancelSeriesMeeting(
+          bookingId: 'b1',
+          seriesId: 's1',
+          date: '2026-11-21',
+        );
+        final b1 = await fake.collection('bookings').doc('b1').get();
+        expect(b1.data()?['status'], 'cancelled');
+        final b2 = await fake.collection('bookings').doc('b2').get();
+        expect(b2.data()?['status'], 'confirmed');
+        final seri = await fake.collection('subscriptions').doc('s1').get();
+        expect(seri.data()?['cancelledMeetingDates'], ['2026-11-21']);
+      },
+    );
 
-      expect(await service.cancelRemainingSeries('series-1'), 1);
-      expect(
-        (await db.collection('bookings').doc('future').get()).data()?['status'],
-        'cancelled',
+    test('cancelRemainingSeries hanya membatalkan pertemuan mendatang yang confirmed', () async {
+      final besok = fmtDate(DateTime.now().add(const Duration(days: 1)));
+      final kemarin = fmtDate(DateTime.now().subtract(const Duration(days: 1)));
+      await seedSeries(fake, id: 's1', status: 'confirmed');
+      await seedBooking(
+        fake,
+        id: 'b-depan',
+        seriesId: 's1',
+        seriesIndex: 1,
+        date: besok,
+        startTime: '19:00',
+        endTime: '20:00',
+        status: 'confirmed',
       );
-      expect(
-        (await db.collection('bookings').doc('past').get()).data()?['status'],
-        'confirmed',
+      await seedBooking(
+        fake,
+        id: 'b-lewat',
+        seriesId: 's1',
+        seriesIndex: 2,
+        date: kemarin,
+        startTime: '19:00',
+        endTime: '20:00',
+        status: 'confirmed',
       );
-      expect(
-        (await db.collection('bookings').doc('pending').get())
-            .data()?['status'],
-        'pending',
+      await seedBooking(
+        fake,
+        id: 'b-pending',
+        seriesId: 's1',
+        seriesIndex: 3,
+        date: besok,
+        startTime: '20:00',
+        endTime: '21:00',
+        status: 'pending',
       );
-      expect(
-        (await db.collection('subscriptions').doc('series-1').get())
-            .data()?['status'],
-        'cancelled',
-      );
+      final n = await service.cancelRemainingSeries('s1');
+      expect(n, 1);
+      final depan = await fake.collection('bookings').doc('b-depan').get();
+      expect(depan.data()?['status'], 'cancelled');
+      final lewat = await fake.collection('bookings').doc('b-lewat').get();
+      expect(lewat.data()?['status'], 'confirmed');
+      final pending = await fake.collection('bookings').doc('b-pending').get();
+      expect(pending.data()?['status'], 'pending');
+      final seri = await fake.collection('subscriptions').doc('s1').get();
+      expect(seri.data()?['status'], 'cancelled');
     });
   });
 }
