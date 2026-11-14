@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:mocktail/mocktail.dart';
@@ -11,6 +12,8 @@ class MockNotificationPlugin extends Mock
 class MockAndroidNotificationPlugin extends Mock
     implements AndroidFlutterLocalNotificationsPlugin {}
 
+class MockAuth extends Mock implements FirebaseAuth {}
+
 class TestFixtures {
   static FakeFirebaseFirestore firestore() => FakeFirebaseFirestore();
 
@@ -21,6 +24,31 @@ class TestFixtures {
     signedIn: true,
     mockUser: MockUser(uid: uid, email: email),
   );
+
+  static MockAuth authThatFails({
+    required String code,
+    String? message,
+    required bool register,
+  }) {
+    final auth = MockAuth();
+    final exception = FirebaseAuthException(code: code, message: message);
+    if (register) {
+      when(
+        () => auth.createUserWithEmailAndPassword(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        ),
+      ).thenAnswer((_) async => throw exception);
+    } else {
+      when(
+        () => auth.signInWithEmailAndPassword(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        ),
+      ).thenAnswer((_) async => throw exception);
+    }
+    return auth;
+  }
 
   static Map<String, dynamic> fieldData({
     String name = 'Lapangan 1',
