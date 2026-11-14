@@ -33,10 +33,10 @@ class VerifyScreen extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                _SectionTitle('Booking menunggu'),
+                const _SectionTitle('Booking menunggu'),
                 _PendingBookings(firestoreService: firestoreService),
-                SizedBox(height: 8),
-                _SectionTitle('Langganan menunggu'),
+                const SizedBox(height: 8),
+                const _SectionTitle('Langganan menunggu'),
                 _PendingSeries(firestoreService: firestoreService),
               ],
             ),
