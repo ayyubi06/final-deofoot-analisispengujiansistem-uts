@@ -191,12 +191,12 @@ void main() {
     test(
       'pengingat main yang sudah waktunya ditampilkan segera + dicatat',
       () async {
-        final mulai = DateTime.now().add(const Duration(minutes: 30));
+        final sekarang = DateTime.now();
         final jamMulai = DateTime(
-          mulai.year,
-          mulai.month,
-          mulai.day,
-          mulai.hour + 1,
+          sekarang.year,
+          sekarang.month,
+          sekarang.day,
+          sekarang.hour + 1,
         );
         final jamAkhir = (jamMulai.hour + 1) % 24;
         await seedBooking(
@@ -236,12 +236,12 @@ void main() {
     });
 
     test('yang sudah tampil tidak ditampilkan ulang', () async {
-      final mulai = DateTime.now().add(const Duration(minutes: 30));
+      final sekarang = DateTime.now();
       final jamMulai = DateTime(
-        mulai.year,
-        mulai.month,
-        mulai.day,
-        mulai.hour + 1,
+        sekarang.year,
+        sekarang.month,
+        sekarang.day,
+        sekarang.hour + 1,
       );
       final jamAkhir = (jamMulai.hour + 1) % 24;
       await seedBooking(
