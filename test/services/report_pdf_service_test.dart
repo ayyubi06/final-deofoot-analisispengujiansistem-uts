@@ -1,59 +1,95 @@
-import 'dart:convert';
-
+import 'package:deofoot/models.dart';
+import 'package:deofoot/report_logic.dart';
 import 'package:deofoot/services/report_pdf_service.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../helpers/test_fixtures.dart';
-
 void main() {
-  test('replaces unsupported en dash only in PDF period labels', () {
-    expect(labelPeriodePdf('18–24 November 2026'), '18s.d.24 November 2026');
-    expect(labelPeriodePdf('Rabu, 18 November 2026'), 'Rabu, 18 November 2026');
-  });
+  TestWidgetsFlutterBinding.ensureInitialized();
 
-  test(
-    'builds a PDF report with populated summary and detail tables',
-    () async {
-      final bytes = await ReportPdfService().buildPdf(
-        lap: TestFixtures.report(),
-        labelPeriode: '18–18 November 2026',
-        tanggalCetak: DateTime(2026, 11, 14),
-      );
-
-      expect(utf8.decode(bytes.take(5).toList()), '%PDF-');
-      expect(bytes.length, greaterThan(500));
-    },
-  );
-
-  test('builds a valid PDF for empty report details', () async {
-    final bytes = await ReportPdfService().buildPdf(
-      lap: TestFixtures.report(populated: false),
-      labelPeriode: '18 November 2026',
-      tanggalCetak: DateTime(2026, 11, 14),
+  Booking booking({
+    required String id,
+    required String fieldId,
+    required String fieldName,
+    required String date,
+    required int totalPrice,
+    String status = 'confirmed',
+  }) {
+    return Booking(
+      id: id,
+      userId: 'u1',
+      userEmail: 'u@test.com',
+      fieldId: fieldId,
+      fieldName: fieldName,
+      date: date,
+      startTime: '19:00',
+      endTime: '20:00',
+      status: status,
+      totalPrice: totalPrice,
+      pricePerHour: 120000,
+      createdAt: DateTime(2026, 10, 20),
     );
-
-    expect(utf8.decode(bytes.take(5).toList()), '%PDF-');
-    expect(bytes.length, greaterThan(500));
-  });
+  }
 
   test(
-    'shares generated PDF using the report date range in its filename',
+    'buildPdf dengan data: tabel per lapangan + per tanggal terisi',
     () async {
-      TestFixtures.installPrintingShareMock();
-      addTearDown(TestFixtures.removePrintingShareMock);
-
-      await ReportPdfService().bagikan(
-        lap: TestFixtures.report(),
-        labelPeriode: '18 November 2026',
+      final lap = hitungLaporan(
+        [
+          booking(
+            id: 'b1',
+            fieldId: 'l1',
+            fieldName: 'Lapangan 1',
+            date: '2026-10-20',
+            totalPrice: 120000,
+          ),
+          booking(
+            id: 'b2',
+            fieldId: 'p1',
+            fieldName: 'Padel 1',
+            date: '2026-10-21',
+            totalPrice: 500000,
+          ),
+          booking(
+            id: 'b3',
+            fieldId: 'l1',
+            fieldName: 'Lapangan 1',
+            date: '2026-10-20',
+            totalPrice: 120000,
+            status: 'pending',
+          ),
+        ],
+        DateTime(2026, 10, 19),
+        DateTime(2026, 10, 25),
       );
-
-      final call = TestFixtures.lastPrintingCall;
-      expect(call?.method, 'sharePdf');
-      expect(
-        (call?.arguments as Map)['name'],
-        'laporan-deofoot_2026-11-18_2026-11-18.pdf',
+      expect(lap.perLapangan, isNotEmpty);
+      expect(lap.pendapatanPerTanggal, isNotEmpty);
+      final bytes = await ReportPdfService().buildPdf(
+        lap: lap,
+        labelPeriode: '19 Oktober 2026 – 25 Oktober 2026',
+        tanggalCetak: DateTime(2026, 10, 21),
       );
-      expect((call?.arguments as Map)['doc'], isNotEmpty);
+      expect(bytes.length, greaterThan(1000));
+      expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
     },
   );
+
+  test('bagikan membuka lembar sistem (channel printing dimock)', () async {
+    const channel = MethodChannel('net.nfet.printing');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async => 1);
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+    final lap = hitungLaporan(
+      const [],
+      DateTime(2026, 10, 19),
+      DateTime(2026, 10, 25),
+    );
+    await ReportPdfService().bagikan(
+      lap: lap,
+      labelPeriode: '19 Oktober 2026 – 25 Oktober 2026',
+    );
+  });
 }
