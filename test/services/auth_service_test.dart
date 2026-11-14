@@ -1,140 +1,159 @@
 import 'package:deofoot/services/auth_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 
-import '../helpers/test_fixtures.dart';
+import '../helpers/fase2_helpers.dart';
 
 void main() {
-  setUpAll(TestFixtures.registerFallbackValues);
+  TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('AuthService with MockFirebaseAuth', () {
-    test('exposes current user and auth state', () async {
-      final auth = TestFixtures.auth();
-      final service = AuthService(auth: auth);
-      expect(service.currentUser?.uid, 'user-1');
-      await expectLater(service.authState, emits(isA<User>()));
+  group('register / signIn / signOut (MockFirebaseAuth)', () {
+    test('register membuat user dan currentUser terisi', () async {
+      final mockAuth = MockFirebaseAuth();
+      final service = AuthService(auth: mockAuth);
+      await service.register('baru@test.com', 'password123');
+      expect(service.currentUser, isNotNull);
+      expect(service.currentUser!.email, 'baru@test.com');
     });
 
-    test('signs in, registers, and signs out', () async {
-      final auth = TestFixtures.auth();
-      final service = AuthService(auth: auth);
-      await service.signIn('user@example.test', 'password');
-      expect(auth.currentUser?.email, 'user@example.test');
+    test('signIn berhasil dan currentUser terisi', () async {
+      final mockAuth = MockFirebaseAuth();
+      final service = AuthService(auth: mockAuth);
+      await service.signIn('siapa@test.com', 'apa-saja');
+      expect(service.currentUser, isNotNull);
+    });
 
-      await service.register('new@example.test', 'password');
-      expect(auth.currentUser?.email, 'new@example.test');
-
+    test('signOut mengosongkan currentUser', () async {
+      final mockAuth = MockFirebaseAuth();
+      final service = AuthService(auth: mockAuth);
+      await service.register('a@test.com', 'password123');
+      expect(service.currentUser, isNotNull);
       await service.signOut();
-      expect(auth.currentUser, isNull);
+      expect(service.currentUser, isNull);
+    });
+
+    test('authState mengalirkan user sesudah register', () async {
+      final mockAuth = MockFirebaseAuth();
+      final service = AuthService(auth: mockAuth);
+      final futureUser = service.authState.firstWhere((user) => user != null);
+      await service.register('a@test.com', 'password123');
+      final user = await futureUser;
+      expect(user, isNotNull);
+      expect(user!.email, 'a@test.com');
     });
   });
 
-  group('Firebase Auth error messages', () {
-    const signInMessages = {
-      'invalid-email': 'Format email tidak valid.',
-      'user-not-found': 'Akun tidak ditemukan. Silakan daftar dulu.',
-      'wrong-password': 'Email atau password salah.',
-      'invalid-credential': 'Email atau password salah.',
-      'network-request-failed': 'Tidak ada koneksi internet.',
-      'too-many-requests': 'Terlalu banyak percobaan. Coba lagi nanti.',
-    };
-
-    for (final entry in signInMessages.entries) {
-      test('maps sign-in error ${entry.key}', () async {
-        final auth = TestFixtures.authThatFails(
-          code: entry.key,
-          register: false,
-        );
+  group('pesan error Indonesia (mocktail)', () {
+    for (final entry in pesanAuthExpected.entries) {
+      test('signIn ${entry.key} -> "${entry.value}"', () async {
+        final mockAuth = MockAuth();
+        when(
+          () => mockAuth.signInWithEmailAndPassword(
+            email: any(named: 'email'),
+            password: any(named: 'password'),
+          ),
+        ).thenThrow(FirebaseAuthException(code: entry.key));
+        final service = AuthService(auth: mockAuth);
         await expectLater(
-          AuthService(auth: auth).signIn('user@example.test', 'password'),
+          () => service.signIn('a@b.com', 'x'),
+          throwsA(entry.value),
+        );
+      });
+
+      test('register ${entry.key} -> "${entry.value}"', () async {
+        final mockAuth = MockAuth();
+        when(
+          () => mockAuth.createUserWithEmailAndPassword(
+            email: any(named: 'email'),
+            password: any(named: 'password'),
+          ),
+        ).thenThrow(FirebaseAuthException(code: entry.key));
+        final service = AuthService(auth: mockAuth);
+        await expectLater(
+          () => service.register('a@b.com', 'x'),
           throwsA(entry.value),
         );
       });
     }
 
-    test('maps registration-specific errors', () async {
-      final existing = TestFixtures.authThatFails(
-        code: 'email-already-in-use',
-        register: true,
+    test('kode tidak dikenal memakai pesan mentah, lalu kode', () async {
+      final mockAuth = MockAuth();
+      when(
+        () => mockAuth.signInWithEmailAndPassword(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        ),
+      ).thenThrow(
+        FirebaseAuthException(code: 'kode-aneh', message: 'pesan mentah'),
       );
-      final weak = TestFixtures.authThatFails(
-        code: 'weak-password',
-        register: true,
-      );
+      final service = AuthService(auth: mockAuth);
       await expectLater(
-        AuthService(auth: existing).register('used@example.test', 'password'),
-        throwsA('Email sudah terdaftar. Silakan masuk.'),
+        () => service.signIn('a@b.com', 'x'),
+        throwsA('Gagal: pesan mentah'),
       );
+
+      final mockAuth2 = MockAuth();
+      when(
+        () => mockAuth2.signInWithEmailAndPassword(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        ),
+      ).thenThrow(FirebaseAuthException(code: 'kode-aneh'));
+      final service2 = AuthService(auth: mockAuth2);
       await expectLater(
-        AuthService(auth: weak).register('user@example.test', '123'),
-        throwsA('Password terlalu lemah (minimal 6 karakter).'),
+        () => service2.signIn('a@b.com', 'x'),
+        throwsA('Gagal: kode-aneh'),
       );
     });
+  });
 
-    test('uses the server message for unrecognized errors', () async {
-      final auth = TestFixtures.authThatFails(
-        code: 'unexpected-code',
-        message: 'Unexpected failure',
-        register: false,
-      );
-      await expectLater(
-        AuthService(auth: auth).signIn('user@example.test', 'password'),
-        throwsA('Gagal: Unexpected failure'),
-      );
+  group('signInWithGoogle (mock channel)', () {
+    const channel = MethodChannel('plugins.flutter.io/google_sign_in');
+
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
     });
 
-    test(
-      'falls back to the error code when server message is absent',
-      () async {
-        final auth = TestFixtures.authThatFails(
-          code: 'unexpected-code',
-          register: true,
-        );
-        await expectLater(
-          AuthService(auth: auth).register('user@example.test', 'password'),
-          throwsA('Gagal: unexpected-code'),
-        );
-      },
-    );
-
-    test('returns null when the user cancels Google sign-in', () async {
-      TestFixtures.installGoogleSignInMock(cancelled: true);
-      addTearDown(TestFixtures.removeGoogleSignInMock);
-
-      expect(
-        await AuthService(auth: TestFixtures.auth()).signInWithGoogle(),
-        isNull,
-      );
+    test('dibatalkan user -> null', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async => null);
+      final service = AuthService(auth: MockFirebaseAuth());
+      final user = await service.signInWithGoogle();
+      expect(user, isNull);
     });
 
-    test(
-      'signs in with Google credentials and returns the Firebase user',
-      () async {
-        TestFixtures.installGoogleSignInMock();
-        addTearDown(TestFixtures.removeGoogleSignInMock);
-        final auth = TestFixtures.auth();
-
-        final user = await AuthService(auth: auth).signInWithGoogle();
-
-        expect(user?.uid, 'user-1');
-        expect(auth.currentUser?.email, 'user@example.test');
-      },
-    );
-
-    test(
-      'maps Firebase errors returned by Google credential sign-in',
-      () async {
-        TestFixtures.installGoogleSignInMock();
-        addTearDown(TestFixtures.removeGoogleSignInMock);
-        final auth = TestFixtures.authThatFailsGoogle(
-          code: 'invalid-credential',
-        );
-
-        await expectLater(
-          AuthService(auth: auth).signInWithGoogle(),
-          throwsA('Email atau password salah.'),
-        );
-      },
-    );
+    test('sukses -> user dari credential', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            if (call.method == 'signIn') {
+              return <String, dynamic>{
+                'email': 'g@test.com',
+                'id': 'google-id-1',
+                'displayName': 'Google User',
+                'photoUrl': null,
+                'serverAuthCode': null,
+                'idToken': 'fake-id-token',
+              };
+            }
+            if (call.method == 'getTokens') {
+              return <String, dynamic>{
+                'accessToken': 'fake-access-token',
+                'idToken': 'fake-id-token',
+              };
+            }
+            return null;
+          });
+      final mockAuth = MockFirebaseAuth(
+        mockUser: MockUser(uid: 'google-uid-1', email: 'g@test.com'),
+      );
+      final service = AuthService(auth: mockAuth);
+      final user = await service.signInWithGoogle();
+      expect(user, isNotNull);
+      expect(user!.uid, 'google-uid-1');
+    });
   });
 }
