@@ -3,9 +3,14 @@ import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
+
+import 'package:deofoot/report_logic.dart';
 
 class MockNotificationPlugin extends Mock
     implements FlutterLocalNotificationsPlugin {}
@@ -23,6 +28,8 @@ class _FakeNotificationDetails extends Fake implements NotificationDetails {}
 class _FakeTZDateTime extends Fake implements tz.TZDateTime {}
 
 class TestFixtures {
+  static MethodCall? lastPrintingCall;
+
   static void registerFallbackValues() {
     registerFallbackValue(_FakeInitializationSettings());
     registerFallbackValue(_FakeNotificationDetails());
@@ -176,6 +183,54 @@ class TestFixtures {
     'danaNumber': danaNumber,
     'danaName': danaName,
   });
+
+  static LaporanPeriode report({bool populated = true}) {
+    final lapangan = AggLapangan('field-1', 'Lapangan 1')
+      ..jumlahBooking = 2
+      ..pendapatan = 240000
+      ..slotTerisi = 2
+      ..okupansiPersen = 14.3;
+    return LaporanPeriode(
+      mulai: DateTime(2026, 11, 18),
+      akhir: DateTime(2026, 11, 18),
+      jumlahHari: 1,
+      jumlahBooking: populated ? 2 : 0,
+      slotTerisi: populated ? 2 : 0,
+      pendapatan: populated ? 240000 : 0,
+      jumlahPerStatus: populated
+          ? {
+              'confirmed': 2,
+              'pending': 1,
+              'rejected': 0,
+              'cancelled': 0,
+              'expired': 0,
+            }
+          : const {},
+      perLapangan: populated ? [lapangan] : const [],
+      pendapatanPerTanggal: populated ? {'2026-11-18': 240000} : const {},
+      bookingPerTanggal: populated ? {'2026-11-18': 2} : const {},
+    );
+  }
+
+  static void installPrintingShareMock() {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    lastPrintingCall = null;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('net.nfet.printing'), (
+          call,
+        ) async {
+          lastPrintingCall = call;
+          return 1;
+        });
+  }
+
+  static void removePrintingShareMock() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('net.nfet.printing'),
+          null,
+        );
+  }
 
   static MockNotificationPlugin notificationPlugin({
     List<PendingNotificationRequest> pending = const [],
