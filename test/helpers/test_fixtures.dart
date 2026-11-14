@@ -5,6 +5,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 class MockNotificationPlugin extends Mock
     implements FlutterLocalNotificationsPlugin {}
@@ -14,7 +15,21 @@ class MockAndroidNotificationPlugin extends Mock
 
 class MockAuth extends Mock implements FirebaseAuth {}
 
+class _FakeInitializationSettings extends Fake
+    implements InitializationSettings {}
+
+class _FakeNotificationDetails extends Fake implements NotificationDetails {}
+
+class _FakeTZDateTime extends Fake implements tz.TZDateTime {}
+
 class TestFixtures {
+  static void registerFallbackValues() {
+    registerFallbackValue(_FakeInitializationSettings());
+    registerFallbackValue(_FakeNotificationDetails());
+    registerFallbackValue(_FakeTZDateTime());
+    registerFallbackValue(AndroidScheduleMode.inexactAllowWhileIdle);
+  }
+
   static FakeFirebaseFirestore firestore() => FakeFirebaseFirestore();
 
   static MockFirebaseAuth auth({
@@ -166,6 +181,13 @@ class TestFixtures {
     List<PendingNotificationRequest> pending = const [],
   }) {
     final plugin = MockNotificationPlugin();
+    final android = androidNotificationPlugin();
+    when(
+      () => plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >(),
+    ).thenReturn(android);
     when(
       () => plugin.initialize(
         settings: any(named: 'settings'),
@@ -207,7 +229,7 @@ class TestFixtures {
     return plugin;
   }
 
-  static void setPreferences() {
-    SharedPreferences.setMockInitialValues({});
+  static void setPreferences([Map<String, Object> initialValues = const {}]) {
+    SharedPreferences.setMockInitialValues(initialValues);
   }
 }
